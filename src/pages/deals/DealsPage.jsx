@@ -13,11 +13,10 @@ const stageLabels = {
   lost: 'Lost'
 };
 
-const navigate = useNavigate();
-
 const stageOrder = ['lead', 'contacted', 'proposal', 'negotiation', 'won', 'lost'];
 
 function DealsPage() {
+  const navigate = useNavigate();
   const [kanban, setKanban] = useState({
     lead: [],
     contacted: [],
