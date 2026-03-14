@@ -13,6 +13,7 @@ import {
   FileText,
   MessageCircle,
   Settings,
+  Target,
   Star,
   Clock,
   LogOut,
@@ -26,6 +27,7 @@ const iconMenuItems = [
   { icon: ShoppingCart, path: '/deals', label: 'Negócios' },
   { icon: Package, path: '/leads', label: 'Leads' },
   { icon: FileText, path: '/activities', label: 'Atividades' },
+  { icon: Target, path: '/metas', label: 'Metas' },
   { icon: UserCircle, path: '/contacts', label: 'Contatos' },
 ];
 
@@ -35,6 +37,7 @@ const menuItems = [
   { icon: UserCircle, label: 'Contatos', path: '/contacts' },
   { icon: Kanban, label: 'Kanban', path: '/deals/kanban' },
   { icon: CalendarCheck, label: 'Atividades', path: '/activities' },
+  { icon: Target, label: 'Metas', path: '/metas' },
 ];
 
 const secondaryItems = [

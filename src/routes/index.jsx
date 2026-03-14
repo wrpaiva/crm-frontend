@@ -8,6 +8,9 @@ import ContactDetailsPage from '../pages/contacts/ContactDetailsPage';
 import DealsPage from '../pages/deals/DealsPage';
 import KanbanPage from '../pages/deals/KanbanPage';
 import ActivitiesPage from '../pages/activities/ActivitiesPage';
+import MetasPage from '../pages/metas/MetasPage';
+import NewMetaPage from '../pages/metas/NewMetaPage';
+import MetaDetailsPage from '../pages/metas/MetaDetailsPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import ProtectedRoute from '../components/common/ProtectedRoute';
 import AppLayout from '../components/layout/AppLayout';
@@ -45,7 +48,11 @@ function AppRoutes() {
         <Route path="deals/kanban" element={<KanbanPage />} />
 
         <Route path="activities" element={<ActivitiesPage />} />
-        
+
+        <Route path="metas" element={<MetasPage />} />
+        <Route path="metas/new" element={<NewMetaPage />} />
+        <Route path="metas/:id" element={<MetaDetailsPage />} />
+
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
