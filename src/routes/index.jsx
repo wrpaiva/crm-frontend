@@ -17,6 +17,7 @@ import AppLayout from '../components/layout/AppLayout';
 import NewLeadPage from '../pages/leads/NewLeadPage';
 import NewContactPage from '../pages/contacts/NewContactPage';
 import NewDealPage from '../pages/deals/NewDealPage';
+import ChatPage from '../pages/chat/ChatPage';
 
 function AppRoutes() {
   return (
@@ -52,6 +53,8 @@ function AppRoutes() {
         <Route path="metas" element={<MetasPage />} />
         <Route path="metas/new" element={<NewMetaPage />} />
         <Route path="metas/:id" element={<MetaDetailsPage />} />
+
+        <Route path="chat" element={<ChatPage />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Route>

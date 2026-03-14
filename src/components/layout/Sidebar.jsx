@@ -11,7 +11,7 @@ import {
   ShoppingCart,
   Package,
   FileText,
-  MessageCircle,
+  Bot,
   Settings,
   Target,
   Star,
@@ -29,6 +29,7 @@ const iconMenuItems = [
   { icon: FileText, path: '/activities', label: 'Atividades' },
   { icon: Target, path: '/metas', label: 'Metas' },
   { icon: UserCircle, path: '/contacts', label: 'Contatos' },
+  { icon: Bot, path: '/chat', label: 'IA Consultiva' },
 ];
 
 const menuItems = [
@@ -41,7 +42,7 @@ const menuItems = [
 ];
 
 const secondaryItems = [
-  { icon: MessageCircle, label: 'Mensagens', path: '#' },
+  { icon: Bot, label: 'IA Consultiva', path: '/chat' },
   { icon: Settings, label: 'Configurações', path: '#' },
   { icon: Star, label: 'Favoritos', path: '#' },
   { icon: Clock, label: 'Histórico', path: '#' },
@@ -112,12 +113,23 @@ function Sidebar() {
         <div className="sidebar-divider"></div>
 
         <nav className="sidebar-nav">
-          {secondaryItems.map(({ icon: Icon, label, path }) => (
-            <a key={label} href={path} className="nav-link">
-              <Icon size={18} />
-              <span className="nav-label">{label}</span>
-            </a>
-          ))}
+          {secondaryItems.map(({ icon: Icon, label, path }) =>
+            path === '#' ? (
+              <a key={label} href={path} className="nav-link">
+                <Icon size={18} />
+                <span className="nav-label">{label}</span>
+              </a>
+            ) : (
+              <NavLink
+                key={label}
+                to={path}
+                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+              >
+                <Icon size={18} />
+                <span className="nav-label">{label}</span>
+              </NavLink>
+            )
+          )}
         </nav>
 
         <div className="sidebar-divider"></div>
