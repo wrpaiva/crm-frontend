@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getContactById } from '../../services/contact.service';
+import HistoryTimeline from '../../components/common/HistoryTimeline';
+import FavoriteButton from '../../components/common/FavoriteButton';
 
 function ContactDetailsPage() {
   const { id } = useParams();
@@ -59,13 +61,25 @@ function ContactDetailsPage() {
     <div>
       <div className="page-title-row">
         <div>
-          <h1>{contact.name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h1>{contact.name}</h1>
+            <FavoriteButton entityType="contact" entityId={id} />
+          </div>
           <p className="page-subtitle">Detalhes do contato</p>
         </div>
 
-        <button className="secondary-button" onClick={() => navigate('/contacts')}>
-          Voltar
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="secondary-button" onClick={() => navigate('/contacts')}>
+            Voltar
+          </button>
+
+          <button
+            className="primary-button"
+            onClick={() => navigate(`/contacts/${id}/edit`)}
+          >
+            Editar
+          </button>
+        </div>
       </div>
 
       <div className="dashboard-block-grid">
@@ -103,6 +117,11 @@ function ContactDetailsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <h2>Histórico</h2>
+        <HistoryTimeline entityType="contact" entityId={id} />
       </div>
     </div>
   );

@@ -20,6 +20,11 @@ export async function updateLeadStatus(id, status) {
   return response.data;
 }
 
+export async function updateLead(id, payload) {
+  const response = await api.put(`/leads/${id}`, payload);
+  return response.data;
+}
+
 export async function convertLead(id, payload) {
   const response = await api.post(`/leads/${id}/convert`, payload);
   return response.data;

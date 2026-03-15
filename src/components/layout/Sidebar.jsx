@@ -18,7 +18,8 @@ import {
   Clock,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MessageCircle
 } from 'lucide-react';
 
 const iconMenuItems = [
@@ -30,6 +31,7 @@ const iconMenuItems = [
   { icon: Target, path: '/metas', label: 'Metas' },
   { icon: UserCircle, path: '/contacts', label: 'Contatos' },
   { icon: Bot, path: '/chat', label: 'IA Consultiva' },
+  { icon: MessageCircle, path: '/whatsapp', label: 'WhatsApp' },
 ];
 
 const menuItems = [
@@ -43,9 +45,10 @@ const menuItems = [
 
 const secondaryItems = [
   { icon: Bot, label: 'IA Consultiva', path: '/chat' },
-  { icon: Settings, label: 'Configurações', path: '#' },
-  { icon: Star, label: 'Favoritos', path: '#' },
-  { icon: Clock, label: 'Histórico', path: '#' },
+  { icon: MessageCircle, label: 'WhatsApp', path: '/whatsapp' },
+  { icon: Settings, label: 'Configurações', path: '/settings' },
+  { icon: Star, label: 'Favoritos', path: '/favorites' },
+  { icon: Clock, label: 'Histórico', path: '/history' },
 ];
 
 function Sidebar() {
@@ -113,23 +116,16 @@ function Sidebar() {
         <div className="sidebar-divider"></div>
 
         <nav className="sidebar-nav">
-          {secondaryItems.map(({ icon: Icon, label, path }) =>
-            path === '#' ? (
-              <a key={label} href={path} className="nav-link">
-                <Icon size={18} />
-                <span className="nav-label">{label}</span>
-              </a>
-            ) : (
-              <NavLink
-                key={label}
-                to={path}
-                className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
-              >
-                <Icon size={18} />
-                <span className="nav-label">{label}</span>
-              </NavLink>
-            )
-          )}
+          {secondaryItems.map(({ icon: Icon, label, path }) => (
+            <NavLink
+              key={label}
+              to={path}
+              className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}
+            >
+              <Icon size={18} />
+              <span className="nav-label">{label}</span>
+            </NavLink>
+          ))}
         </nav>
 
         <div className="sidebar-divider"></div>
