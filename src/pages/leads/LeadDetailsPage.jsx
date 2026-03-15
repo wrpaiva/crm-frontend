@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { convertLead, getLeadById, updateLeadStatus } from '../../services/lead.service';
+import HistoryTimeline from '../../components/common/HistoryTimeline';
+import FavoriteButton from '../../components/common/FavoriteButton';
 
 const statusLabels = {
   new: 'Novo',
@@ -115,13 +117,23 @@ function LeadDetailsPage() {
     <div>
       <div className="page-title-row">
         <div>
-          <h1>{lead.name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h1>{lead.name}</h1>
+            <FavoriteButton entityType="lead" entityId={id} />
+          </div>
           <p className="page-subtitle">Detalhes do lead</p>
         </div>
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="secondary-button" onClick={() => navigate('/leads')}>
             Voltar
+          </button>
+
+          <button
+            className="primary-button"
+            onClick={() => navigate(`/leads/${id}/edit`)}
+          >
+            Editar
           </button>
 
           <button
@@ -191,6 +203,11 @@ function LeadDetailsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <h2>Histórico</h2>
+        <HistoryTimeline entityType="lead" entityId={id} />
       </div>
     </div>
   );

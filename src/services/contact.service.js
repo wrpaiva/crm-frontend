@@ -14,3 +14,8 @@ export async function createContact(payload) {
   const response = await api.post('/contacts', payload);
   return response.data;
 }
+
+export async function updateContact(id, payload) {
+  const response = await api.put(`/contacts/${id}`, payload);
+  return response.data;
+}

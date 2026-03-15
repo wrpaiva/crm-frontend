@@ -44,13 +44,23 @@ export function AuthProvider({ children }) {
     loadUser();
   }, []);
 
+  async function refreshUser() {
+    try {
+      const me = await meRequest();
+      setUser(me);
+    } catch (error) {
+      // silent fail
+    }
+  }
+
   const value = useMemo(
     () => ({
       user,
       loading,
       isAuthenticated: !!user,
       login,
-      logout
+      logout,
+      refreshUser
     }),
     [user, loading]
   );

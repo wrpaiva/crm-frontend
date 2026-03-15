@@ -49,6 +49,11 @@ function LoginPage() {
         {error ? <p className="error-text">{error}</p> : null}
 
         <button type="submit">Entrar</button>
+
+        <p className="register-link">
+          Não tem uma conta?{' '}
+          <a href="/register">Criar conta</a>
+        </p>
       </form>
     </div>
   );
