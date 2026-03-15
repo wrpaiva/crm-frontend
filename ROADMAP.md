@@ -80,6 +80,18 @@
 - [x] Edição de Lead (formulário + PUT /leads/:id)
 - [x] Edição de Contato (formulário + PUT /contacts/:id)
 
+### Lead Scoring, Distribuição & Enriquecimento
+- [x] Lead scoring automático básico (regra simples configurável)
+- [x] Regras de distribuição: Round Robin e Manual
+- [x] Enriquecimento automático de lead via BrasilAPI (CNPJ → razão social, endereço, situação, porte, atividade)
+- [x] Validação algorítmica de CPF
+- [x] Campos CNPJ e CPF no lead (model, formulários, detalhes)
+- [x] Botão manual "Enriquecer" na página de detalhes do lead
+- [x] Seção "Dados Enriquecidos" com informações retornadas da BrasilAPI
+- [x] Enriquecimento automático na criação do lead (assíncrono, não bloqueante)
+- [x] Endpoint POST /leads/:id/enrich para enriquecimento manual
+- [x] Máscaras visuais de CNPJ e CPF nos formulários
+
 ### Administração
 - [x] Gestão de Usuários — listagem, criação, alteração de role/status (admin)
 - [x] Página de Configurações com abas (Perfil, Segurança, Usuários, Pipeline, Preferências)
@@ -130,21 +142,107 @@
 
 ---
 
-## Pendente
+## Fase 3 — Produto Comercial
 
-### Frontend — Sidebar
-- [x] ~~Favoritos~~ — implementado com página dedicada
-- [x] ~~Histórico~~ — implementado com página dedicada
+### 3A — Fundação Comercial
 
-### Melhorias potenciais
-- [x] ~~**Integração com WhatsApp**~~ — implementado com Cloud API, webhook, central de conversas e Socket.IO
-- [x] ~~**Notificações em tempo real**~~ — implementado com módulo completo (model, Socket.IO, bell dropdown, integração em todos os módulos)
-- [ ] **Relatórios exportáveis** — PDF/Excel de pipeline, performance, metas
-- [ ] **Busca global** — pesquisa unificada de leads, contatos, deals
-- [ ] **Dark/Light mode toggle** — atualmente só dark mode
-- [ ] **Paginação no frontend** — algumas listagens não têm navegação de páginas
-- [ ] **Upload de arquivos** — anexos em leads, contatos, deals
-- [ ] **Integração com e-mail** — envio de e-mails direto do CRM
-- [ ] **Dashboard customizável** — widgets drag & drop
-- [x] ~~**WhatsApp — envio de mídia**~~ — imagens, documentos, áudio, vídeo via Cloud API
-- [x] ~~**WhatsApp — templates**~~ — envio de mensagens template (HSM) para iniciar conversas
+#### Pipeline Avançado
+- [ ] Card expandido com abas: Conversas, Informações do Lead, Histórico do Pipeline
+- [ ] Cards compactos com informações essenciais no Kanban
+
+#### Lead Scoring & Distribuição
+- [x] Lead scoring automático básico (regra simples configurável)
+- [x] Regras de distribuição: Round Robin e Manual
+- [x] Enriquecimento automático de lead (BrasilAPI — CNPJ/CPF)
+
+#### Cadência & Automação
+- [ ] Cadência automática de 5 tentativas na etapa SDR Qualificando
+- [ ] Mudança automática para Lead Frio após cadência expirada
+- [ ] Agendamento via link integrado ao Google Calendar (criação de evento e lembretes 24h/1h)
+
+#### IA — Copiloto Comercial
+- [ ] Resumos automáticos de conversas e próximas ações sugeridas (OpenAI)
+- [ ] Respostas sugeridas editáveis com variáveis de template
+- [ ] Rankeamento de respostas por eficácia
+
+#### Dashboard Operacional
+- [ ] Métricas operacionais chave (taxa de reuniões, leads criados, leads esquecidos)
+- [ ] Relatórios avançados e exportes customizados (PDF/Excel)
+- [ ] Dashboard customizável com widgets drag & drop
+
+#### Notificações Avançadas
+- [ ] Toast com opção "desfazer" (undo)
+- [ ] Notificações push via PWA
+
+#### Melhorias Gerais
+- [ ] Busca global — pesquisa unificada de leads, contatos, deals
+- [ ] Dark/Light mode toggle
+- [ ] Paginação no frontend em todas as listagens
+- [ ] Upload de arquivos — anexos em leads, contatos, deals
+
+---
+
+### 3B — Expansão Multicanal & IA
+
+#### Multicanal WhatsApp
+- [ ] Multi-contas WhatsApp com gestão avançada de filas
+- [ ] Priorização de filas por lead score
+
+#### Ecosistema Multicanal
+- [ ] Integração com Instagram (DM via Meta API)
+- [ ] Integração com Telegram (Bot API)
+- [ ] E-mail conversacional (IMAP/SMTP ou SendGrid/Mailgun)
+- [ ] Normalização de conversas — timeline unificada por lead independente do canal
+
+#### IA Avançada
+- [ ] Integração com vector DB para busca semântica de conversas
+- [ ] Histórico de casos similares via embeddings
+- [ ] A/B testing de scripts e playbooks com painel de eficácia
+
+#### Anexos & Documentos
+- [ ] Suporte a anexos ricos com preview inline
+- [ ] OCR básico para documentos enviados (extração de texto)
+
+#### Mobile
+- [ ] Mobile PWA com notificações push e offline básico
+- [ ] Mensagens offline com sincronização ao reconectar
+
+---
+
+### 3C — Enterprise & Escala
+
+#### IA Preditiva & ML
+- [ ] Machine learning proprietário para predição de fechamento
+- [ ] Estimativa de LTV (Customer Lifetime Value) por lead
+- [ ] Recomendação automática de consultor ideal por perfil
+- [ ] Recomendações de investimento de tempo por lead
+- [ ] Modelos de IA customizados treinados com dados anonimizados do setor
+
+#### Integrações Profundas
+- [ ] Integração com operadoras para consultas em tempo real (rede credenciada, portabilidade, preços)
+- [ ] Geração automática de cotações personalizadas
+
+#### Voz & Análise
+- [ ] Transcrição de chamadas de voz (speech-to-text)
+- [ ] Análise de tópicos e sentimento em chamadas
+
+#### Automação Full-Funnel
+- [ ] Envio programado de materiais educativos multimídia via WhatsApp (respeitando templates e políticas)
+- [ ] Sequências omnichannel (e-mail, SMS, WhatsApp) automatizadas
+
+#### Onboarding & Treinamento
+- [ ] Ferramenta de onboarding automatizado para novos consultores
+- [ ] Treinamento baseado em conversas reais (microlearning)
+
+#### Marketplace
+- [ ] Marketplace de scripts e integrações
+- [ ] Marketplace de playbooks e templates
+- [ ] White-label para grandes parceiros
+- [ ] Parceiros de operadoras e parceiros de implantação
+
+#### Governance & Multi-tenant
+- [ ] Governance & compliance empresarial (retention policies, DLP, suporte a auditorias externas)
+- [ ] Multi-tenant escalável completo com provisioning e quotas dedicadas
+
+#### Mobile Nativo
+- [ ] Apps nativos (iOS/Android) com mensagens offline e sincronização completa

@@ -29,3 +29,8 @@ export async function convertLead(id, payload) {
   const response = await api.post(`/leads/${id}/convert`, payload);
   return response.data;
 }
+
+export async function enrichLead(id) {
+  const response = await api.post(`/leads/${id}/enrich`);
+  return response.data;
+}

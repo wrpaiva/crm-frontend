@@ -4,11 +4,30 @@ import { createLead } from '../../services/lead.service';
 import { useToast } from '../../hooks/useToast';
 import { getErrorMessage } from '../../utils/http';
 
+function formatCnpj(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 14);
+  return digits
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2}\.\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{2}\.\d{3}\.\d{3})(\d)/, '$1/$2')
+    .replace(/^(\d{2}\.\d{3}\.\d{3}\/\d{4})(\d)/, '$1-$2');
+}
+
+function formatCpf(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3}\.\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3}\.\d{3}\.\d{3})(\d)/, '$1-$2');
+}
+
 const initialForm = {
   name: '',
   email: '',
   phone: '',
   company: '',
+  cnpj: '',
+  cpf: '',
   source: 'manual',
   notes: ''
 };
@@ -28,9 +47,13 @@ function NewLeadPage() {
   function handleChange(event) {
     const { name, value } = event.target;
 
+    let formatted = value;
+    if (name === 'cnpj') formatted = formatCnpj(value);
+    if (name === 'cpf') formatted = formatCpf(value);
+
     setForm((prev) => ({
       ...prev,
-      [name]: value
+      [name]: formatted
     }));
 
     setErrors((prev) => ({
@@ -74,6 +97,8 @@ function NewLeadPage() {
         email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined,
         company: form.company.trim() || undefined,
+        cnpj: form.cnpj.replace(/\D/g, '') || undefined,
+        cpf: form.cpf.replace(/\D/g, '') || undefined,
         source: form.source,
         notes: form.notes.trim() ? [form.notes.trim()] : []
       };
@@ -158,6 +183,28 @@ function NewLeadPage() {
             </div>
 
             <div className="form-field">
+              <label>CNPJ</label>
+              <input
+                name="cnpj"
+                type="text"
+                placeholder="00.000.000/0000-00"
+                value={form.cnpj}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className="form-field">
+              <label>CPF</label>
+              <input
+                name="cpf"
+                type="text"
+                placeholder="000.000.000-00"
+                value={form.cpf}
+                onChange={handleChange}
+              />
+            </div>
+
+            <div className="form-field">
               <label>Origem</label>
               <select name="source" value={form.source} onChange={handleChange}>
                 <option value="manual">Manual</option>
@@ -165,6 +212,7 @@ function NewLeadPage() {
                 <option value="whatsapp">WhatsApp</option>
                 <option value="instagram">Instagram</option>
                 <option value="facebook">Facebook</option>
+                <option value="tiktok">TikTok</option>
                 <option value="indicacao">Indicação</option>
               </select>
             </div>

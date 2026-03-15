@@ -9,6 +9,7 @@ import { useToast } from '../../hooks/useToast';
 import { getErrorMessage } from '../../utils/http';
 import PageLoader from '../../components/common/PageLoader';
 import EmptyState from '../../components/common/EmptyState';
+import ScoreBadge from '../../components/common/ScoreBadge';
 
 const statusLabels = {
   new: 'Novo',
@@ -42,7 +43,9 @@ function LeadsPage() {
   const [filters, setFilters] = useState({
     search: '',
     status: '',
-    source: ''
+    source: '',
+    scoreLabel: '',
+    sortByScore: false
   });
 
   useEffect(() => {
@@ -58,7 +61,9 @@ function LeadsPage() {
       const params = {
         ...(customFilters.search ? { search: customFilters.search } : {}),
         ...(customFilters.status ? { status: customFilters.status } : {}),
-        ...(customFilters.source ? { source: customFilters.source } : {})
+        ...(customFilters.source ? { source: customFilters.source } : {}),
+        ...(customFilters.scoreLabel ? { scoreLabel: customFilters.scoreLabel } : {}),
+        ...(customFilters.sortByScore ? { sortByScore: 'true' } : {})
       };
 
       const data = await getLeads(params);
@@ -177,9 +182,33 @@ function LeadsPage() {
           <option value="whatsapp">WhatsApp</option>
           <option value="instagram">Instagram</option>
           <option value="facebook">Facebook</option>
+          <option value="tiktok">TikTok</option>
           <option value="indicacao">Indicação</option>
           <option value="manual">Manual</option>
         </select>
+
+        <select
+          value={filters.scoreLabel}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, scoreLabel: e.target.value }))
+          }
+        >
+          <option value="">Todos os scores</option>
+          <option value="hot">Quente</option>
+          <option value="warm">Morno</option>
+          <option value="cold">Frio</option>
+        </select>
+
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--text-secondary)' }}>
+          <input
+            type="checkbox"
+            checked={filters.sortByScore}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, sortByScore: e.target.checked }))
+            }
+          />
+          Ordenar por score
+        </label>
 
         <button className="primary-button" type="submit">
           Filtrar
@@ -211,6 +240,7 @@ function LeadsPage() {
             <thead>
               <tr>
                 <th>Nome</th>
+                <th>Score</th>
                 <th>Empresa</th>
                 <th>Origem</th>
                 <th>Status</th>
@@ -226,6 +256,10 @@ function LeadsPage() {
                     <Link to={`/leads/${lead.id}`}>
                       <strong>{lead.name}</strong>
                     </Link>
+                  </td>
+
+                  <td>
+                    <ScoreBadge score={lead.score} label={lead.scoreLabel} />
                   </td>
 
                   <td>{lead.company || '-'}</td>

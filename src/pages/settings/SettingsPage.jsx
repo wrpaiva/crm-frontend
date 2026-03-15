@@ -20,6 +20,23 @@ import {
   updateStage,
   removeStage
 } from '../../services/pipeline.service';
+import {
+  getRules,
+  createRule,
+  updateRule as updateScoringRule,
+  deleteRule,
+  recalculateAll
+} from '../../services/scoring.service';
+import {
+  getConfig as getDistributionConfig,
+  updateConfig as updateDistributionConfig,
+  addToPool,
+  removeFromPool
+} from '../../services/distribution.service';
+import {
+  getCadenceConfig,
+  updateCadenceConfig
+} from '../../services/cadence.service';
 import PageLoader from '../../components/common/PageLoader';
 
 const TABS = [
@@ -27,6 +44,9 @@ const TABS = [
   { key: 'security', label: 'Segurança' },
   { key: 'users', label: 'Usuários', adminOnly: true },
   { key: 'pipeline', label: 'Pipeline', adminOnly: true },
+  { key: 'scoring', label: 'Scoring', adminOnly: true },
+  { key: 'distribution', label: 'Distribuição', adminOnly: true },
+  { key: 'cadence', label: 'Cadência', adminOnly: true },
   { key: 'preferences', label: 'Preferências' }
 ];
 
@@ -76,6 +96,15 @@ function SettingsPage() {
         )}
         {activeTab === 'pipeline' && isAdminOrManager && (
           <PipelinePanel toast={toast} />
+        )}
+        {activeTab === 'scoring' && isAdminOrManager && (
+          <ScoringPanel toast={toast} />
+        )}
+        {activeTab === 'distribution' && isAdminOrManager && (
+          <DistributionPanel toast={toast} />
+        )}
+        {activeTab === 'cadence' && isAdminOrManager && (
+          <CadencePanel toast={toast} />
         )}
         {activeTab === 'preferences' && <PreferencesPanel />}
       </div>
@@ -891,6 +920,571 @@ function PipelinePanel({ toast }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// --- Scoring Panel ---
+function ScoringPanel({ toast }) {
+  const [rules, setRules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingRule, setEditingRule] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [form, setForm] = useState({
+    name: '', field: '', operator: 'not_empty', value: '', points: 0, isActive: true, order: 0
+  });
+
+  useEffect(() => {
+    loadRules();
+  }, []);
+
+  async function loadRules() {
+    try {
+      setLoading(true);
+      const data = await getRules();
+      setRules(data.data || []);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar regras de scoring.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openModal(rule = null) {
+    if (rule) {
+      setEditingRule(rule);
+      setForm({
+        name: rule.name,
+        field: rule.field,
+        operator: rule.operator,
+        value: rule.value || '',
+        points: rule.points,
+        isActive: rule.isActive,
+        order: rule.order || 0
+      });
+    } else {
+      setEditingRule(null);
+      setForm({ name: '', field: '', operator: 'not_empty', value: '', points: 0, isActive: true, order: 0 });
+    }
+    setShowModal(true);
+  }
+
+  async function handleSave(e) {
+    e.preventDefault();
+    if (!form.name.trim() || !form.field.trim()) {
+      toast.error('Nome e campo são obrigatórios.');
+      return;
+    }
+    try {
+      setSaving(true);
+      if (editingRule) {
+        await updateScoringRule(editingRule.id, form);
+        toast.success('Regra atualizada.');
+      } else {
+        await createRule(form);
+        toast.success('Regra criada.');
+      }
+      setShowModal(false);
+      await loadRules();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar regra.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(ruleId) {
+    if (!window.confirm('Remover esta regra de scoring?')) return;
+    try {
+      await deleteRule(ruleId);
+      toast.success('Regra removida.');
+      await loadRules();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao remover regra.'));
+    }
+  }
+
+  async function handleRecalculate() {
+    if (!window.confirm('Recalcular score de todos os leads? Isso pode levar alguns segundos.')) return;
+    try {
+      setRecalculating(true);
+      const result = await recalculateAll();
+      toast.success(`Scores recalculados: ${result.data?.updated || 0} leads atualizados.`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao recalcular scores.'));
+    } finally {
+      setRecalculating(false);
+    }
+  }
+
+  async function handleToggleActive(rule) {
+    try {
+      await updateScoringRule(rule.id, { isActive: !rule.isActive });
+      toast.success(rule.isActive ? 'Regra desativada.' : 'Regra ativada.');
+      await loadRules();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar regra.'));
+    }
+  }
+
+  if (loading) return <PageLoader text="Carregando regras de scoring..." />;
+
+  const operatorLabels = { exists: 'Existe', equals: 'Igual a', contains: 'Contém', not_empty: 'Não vazio' };
+
+  return (
+    <div>
+      <div className="settings-users-header">
+        <h3 style={{ margin: 0 }}>Regras de Scoring</h3>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            className="secondary-button"
+            onClick={handleRecalculate}
+            disabled={recalculating}
+          >
+            {recalculating ? 'Recalculando...' : 'Recalcular Todos'}
+          </button>
+          <button className="primary-button" onClick={() => openModal()}>
+            Nova Regra
+          </button>
+        </div>
+      </div>
+
+      <div className="table-card" style={{ marginTop: 16 }}>
+        <table className="crm-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Campo</th>
+              <th>Operador</th>
+              <th>Valor</th>
+              <th>Pontos</th>
+              <th>Ativo</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rules.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center' }}>Nenhuma regra cadastrada.</td>
+              </tr>
+            ) : (
+              rules.map((rule) => (
+                <tr key={rule.id}>
+                  <td><strong>{rule.name}</strong></td>
+                  <td>{rule.field}</td>
+                  <td>{operatorLabels[rule.operator] || rule.operator}</td>
+                  <td>{rule.value || '-'}</td>
+                  <td>
+                    <span style={{ color: rule.points >= 0 ? 'var(--accent-green)' : 'var(--accent-red)', fontWeight: 600 }}>
+                      {rule.points > 0 ? '+' : ''}{rule.points}
+                    </span>
+                  </td>
+                  <td>
+                    <button
+                      className={`user-status-toggle ${rule.isActive ? 'deactivate' : 'activate'}`}
+                      onClick={() => handleToggleActive(rule)}
+                    >
+                      {rule.isActive ? 'Ativo' : 'Inativo'}
+                    </button>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="secondary-button" onClick={() => openModal(rule)}>Editar</button>
+                      <button className="secondary-button" onClick={() => handleDelete(rule.id)}>Excluir</button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>{editingRule ? 'Editar Regra' : 'Nova Regra'}</h2>
+            <form className="settings-form" onSubmit={handleSave} style={{ maxWidth: '100%' }}>
+              <div className="settings-form-group">
+                <label>Nome *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Ex: Tem e-mail"
+                />
+              </div>
+              <div className="settings-form-group">
+                <label>Campo *</label>
+                <select
+                  value={form.field}
+                  onChange={(e) => setForm((p) => ({ ...p, field: e.target.value }))}
+                >
+                  <option value="">Selecione...</option>
+                  <option value="email">E-mail</option>
+                  <option value="phone">Telefone</option>
+                  <option value="company">Empresa</option>
+                  <option value="source">Fonte</option>
+                  <option value="name">Nome</option>
+                </select>
+              </div>
+              <div className="settings-form-group">
+                <label>Operador</label>
+                <select
+                  value={form.operator}
+                  onChange={(e) => setForm((p) => ({ ...p, operator: e.target.value }))}
+                >
+                  <option value="not_empty">Não vazio</option>
+                  <option value="exists">Existe</option>
+                  <option value="equals">Igual a</option>
+                  <option value="contains">Contém</option>
+                </select>
+              </div>
+              {(form.operator === 'equals' || form.operator === 'contains') && (
+                <div className="settings-form-group">
+                  <label>Valor</label>
+                  <input
+                    type="text"
+                    value={form.value}
+                    onChange={(e) => setForm((p) => ({ ...p, value: e.target.value }))}
+                    placeholder="Valor para comparar"
+                  />
+                </div>
+              )}
+              <div className="settings-form-group">
+                <label>Pontos</label>
+                <input
+                  type="number"
+                  value={form.points}
+                  onChange={(e) => setForm((p) => ({ ...p, points: parseInt(e.target.value, 10) || 0 }))}
+                />
+              </div>
+              <div className="settings-form-group">
+                <label>Ordem</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.order}
+                  onChange={(e) => setForm((p) => ({ ...p, order: parseInt(e.target.value, 10) || 0 }))}
+                />
+              </div>
+              <div className="settings-form-actions">
+                <button type="button" className="secondary-button" onClick={() => setShowModal(false)} disabled={saving}>
+                  Cancelar
+                </button>
+                <button type="submit" className="primary-button" disabled={saving}>
+                  {saving ? 'Salvando...' : (editingRule ? 'Salvar Alterações' : 'Criar Regra')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Distribution Panel ---
+function DistributionPanel({ toast }) {
+  const [config, setConfig] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  async function loadData() {
+    try {
+      setLoading(true);
+      const [configData, usersData] = await Promise.all([
+        getDistributionConfig(),
+        getUsers({ limit: 100 })
+      ]);
+      setConfig(configData.data);
+      setUsers((usersData.data || []).filter((u) => u.active));
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar configuração de distribuição.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleModeChange(newMode) {
+    try {
+      setSaving(true);
+      const result = await updateDistributionConfig({ mode: newMode });
+      setConfig(result.data);
+      toast.success(`Modo alterado para ${newMode === 'round_robin' ? 'Round Robin' : 'Manual'}.`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao alterar modo.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTogglePool(userId) {
+    const isInPool = config?.roundRobinState?.pool?.some((u) => u.id === userId);
+    try {
+      let result;
+      if (isInPool) {
+        result = await removeFromPool(userId);
+      } else {
+        result = await addToPool(userId);
+      }
+      setConfig(result.data);
+      toast.success(isInPool ? 'Vendedor removido do pool.' : 'Vendedor adicionado ao pool.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao atualizar pool.'));
+    }
+  }
+
+  if (loading) return <PageLoader text="Carregando configuração de distribuição..." />;
+
+  const poolIds = (config?.roundRobinState?.pool || []).map((u) => u.id);
+  const nextIndex = config?.roundRobinState?.lastAssignedIndex || 0;
+  const activePool = (config?.roundRobinState?.pool || []).filter((u) => u.active);
+  const nextUserId = activePool.length > 0 ? activePool[nextIndex % activePool.length]?.id : null;
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 16px 0' }}>Modo de Distribuição</h3>
+
+      <div className="distribution-mode-toggle">
+        <button
+          className={`distribution-mode-btn ${config?.mode === 'manual' ? 'active' : ''}`}
+          onClick={() => handleModeChange('manual')}
+          disabled={saving}
+        >
+          Manual
+        </button>
+        <button
+          className={`distribution-mode-btn ${config?.mode === 'round_robin' ? 'active' : ''}`}
+          onClick={() => handleModeChange('round_robin')}
+          disabled={saving}
+        >
+          Round Robin
+        </button>
+      </div>
+
+      <p className="muted-text" style={{ margin: '12px 0 20px' }}>
+        {config?.mode === 'manual'
+          ? 'No modo manual, o criador do lead escolhe quem será o responsável.'
+          : 'No modo Round Robin, leads são distribuídos automaticamente entre os vendedores do pool.'}
+      </p>
+
+      {config?.mode === 'round_robin' && (
+        <div>
+          <h3 style={{ margin: '0 0 12px 0' }}>Pool de Vendedores</h3>
+          <p className="muted-text" style={{ marginBottom: 16 }}>
+            Selecione os vendedores que receberão leads automaticamente.
+          </p>
+
+          <div className="distribution-pool-list">
+            {users.map((user) => {
+              const isInPool = poolIds.includes(user.id);
+              const isNext = user.id === nextUserId;
+              return (
+                <div key={user.id} className={`distribution-pool-item ${isInPool ? 'in-pool' : ''}`}>
+                  <div className="distribution-pool-info">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={isInPool}
+                        onChange={() => handleTogglePool(user.id)}
+                      />
+                      <div>
+                        <strong>{user.name}</strong>
+                        <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)' }}>
+                          {user.email} - {ROLE_LABELS[user.role] || user.role}
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+                  {isInPool && isNext && (
+                    <span className="distribution-next-badge">Próximo</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {activePool.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <p className="muted-text">
+                Ordem atual: {activePool.map((u, i) => (
+                  <span key={u.id}>
+                    {i > 0 && ' → '}
+                    <strong style={{ color: u.id === nextUserId ? 'var(--accent-blue)' : 'var(--text-primary)' }}>
+                      {u.name}
+                    </strong>
+                  </span>
+                ))}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Cadence Panel ---
+function CadencePanel({ toast }) {
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    steps: 5,
+    intervalDays: 1,
+    activityType: 'call',
+    onExpire: 'cold',
+    isActive: true,
+    triggerStatus: 'contacted'
+  });
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  async function loadConfig() {
+    try {
+      setLoading(true);
+      const data = await getCadenceConfig();
+      const cfg = data.data;
+      if (cfg) {
+        setConfig(cfg);
+        setForm({
+          steps: cfg.steps || 5,
+          intervalDays: cfg.intervalDays || 1,
+          activityType: cfg.activityType || 'call',
+          onExpire: cfg.onExpire || 'cold',
+          isActive: cfg.isActive !== undefined ? cfg.isActive : true,
+          triggerStatus: cfg.triggerStatus || 'contacted'
+        });
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar configuração de cadência.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      const result = await updateCadenceConfig(form);
+      setConfig(result.data);
+      toast.success('Configuração de cadência atualizada.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar configuração.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <PageLoader text="Carregando configuração de cadência..." />;
+
+  const statusOptions = [
+    { value: 'new', label: 'Novo' },
+    { value: 'contacted', label: 'Contactado' },
+    { value: 'qualified', label: 'Qualificado' },
+    { value: 'proposal', label: 'Proposta' },
+    { value: 'negotiation', label: 'Negociação' }
+  ];
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 16px 0' }}>Configuração de Cadência</h3>
+      <p className="muted-text" style={{ marginBottom: 20 }}>
+        Define as regras automáticas de follow-up para leads.
+      </p>
+
+      <form className="settings-form" onSubmit={handleSubmit} style={{ maxWidth: 480 }}>
+        <div className="settings-form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+            />
+            Cadência ativa
+          </label>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Número de steps</label>
+          <input
+            type="number"
+            min="1"
+            max="20"
+            value={form.steps}
+            onChange={(e) => setForm((p) => ({ ...p, steps: parseInt(e.target.value, 10) || 1 }))}
+          />
+          <small>Quantidade de tentativas de contato (1-20)</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Intervalo entre steps (dias)</label>
+          <input
+            type="number"
+            min="1"
+            max="30"
+            value={form.intervalDays}
+            onChange={(e) => setForm((p) => ({ ...p, intervalDays: parseInt(e.target.value, 10) || 1 }))}
+          />
+          <small>Dias entre cada tentativa (1-30)</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Tipo de atividade</label>
+          <select
+            value={form.activityType}
+            onChange={(e) => setForm((p) => ({ ...p, activityType: e.target.value }))}
+          >
+            <option value="call">Ligação</option>
+            <option value="email">E-mail</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="meeting">Reunião</option>
+            <option value="task">Tarefa</option>
+          </select>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Ação ao expirar</label>
+          <select
+            value={form.onExpire}
+            onChange={(e) => setForm((p) => ({ ...p, onExpire: e.target.value }))}
+          >
+            <option value="cold">Marcar como frio</option>
+            <option value="lost">Mover para perdido</option>
+            <option value="both">Ambos</option>
+          </select>
+          <small>O que acontece quando todas as tentativas se esgotam</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Status que ativa cadência</label>
+          <select
+            value={form.triggerStatus}
+            onChange={(e) => setForm((p) => ({ ...p, triggerStatus: e.target.value }))}
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="settings-form-actions">
+          <button type="submit" className="primary-button" disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar Configuração'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
