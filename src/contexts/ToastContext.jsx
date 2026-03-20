@@ -7,6 +7,7 @@ let toastId = 0;
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const timersRef = useRef({});
+  const onUndoCallbacksRef = useRef({});
 
   const removeToast = useCallback((id) => {
     clearTimeout(timersRef.current[id]);
@@ -27,11 +28,15 @@ export function ToastProvider({ children }) {
   const undoable = useCallback((message, onConfirm, onUndo, duration = 5000) => {
     const id = ++toastId;
 
-    setToasts((prev) => [...prev, { id, message, type: 'undo', onConfirm, onUndo }]);
+    // Store onUndo in ref, not in state
+    if (onUndo) onUndoCallbacksRef.current[id] = onUndo;
+
+    setToasts((prev) => [...prev, { id, message, type: 'undo', onConfirm }]);
 
     timersRef.current[id] = setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
       delete timersRef.current[id];
+      delete onUndoCallbacksRef.current[id];
       try { onConfirm(); } catch (_) { /* ignore */ }
     }, duration);
   }, []);
@@ -39,11 +44,11 @@ export function ToastProvider({ children }) {
   const handleUndo = useCallback((id) => {
     clearTimeout(timersRef.current[id]);
     delete timersRef.current[id];
-    setToasts((prev) => {
-      const toast = prev.find((t) => t.id === id);
-      if (toast?.onUndo) try { toast.onUndo(); } catch (_) { /* ignore */ }
-      return prev.filter((t) => t.id !== id);
-    });
+    // Read onUndo from ref BEFORE calling setToasts (to keep updater pure)
+    const onUndo = onUndoCallbacksRef.current[id];
+    delete onUndoCallbacksRef.current[id];
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+    if (onUndo) try { onUndo(); } catch (_) { /* ignore */ }
   }, []);
 
   const success = useCallback((message) => {
