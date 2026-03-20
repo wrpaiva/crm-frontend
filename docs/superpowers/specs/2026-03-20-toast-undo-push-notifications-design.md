@@ -10,58 +10,167 @@
 
 ### Contexto
 
-O `ToastContext` já possui toda a lógica de undo implementada: função `undoable()`, `handleUndo()`, CSS das classes `toast-undo` e `toast-undo-btn`. O trabalho consiste em integrar esse mecanismo nas operações de delete e mudança de status nas páginas.
+O `ToastContext` já possui toda a lógica de undo: `undoable()`, `handleUndo()`, CSS das classes `toast-undo` e `toast-undo-btn`. O `MetaDetailsPage.handleDelete()` já usa `toast.undoable()` corretamente — está pronto e não requer alteração.
+
+O trabalho restante é:
+1. Adicionar funções de delete nos services do frontend (que hoje não as têm)
+2. Adicionar botões/handlers de delete nas páginas que ainda não os têm
+3. Criar hooks reutilizáveis para o padrão optimistic + undo
+4. Integrar nas mudanças de status (concluir atividade, won/lost em deals)
 
 ### Fluxo
 
 1. Usuário aciona delete ou mudança de status
-2. O item some da UI **imediatamente** (otimisticamente)
+2. O item some da UI / muda de estado **imediatamente** (otimisticamente)
 3. Toast amarelo aparece com mensagem + botão "Desfazer" + timer de 5s
 4. Se timer expirar → chamada à API é executada
-5. Se "Desfazer" clicado → item é reinserido no state local, API nunca é chamada
+5. Se "Desfazer" clicado → item é reinserido na posição original / status revertido no state local; API nunca é chamada
 
-### Hook `useUndoableDelete`
+### Alteração necessária em `ToastContext`
 
-Criado em `src/hooks/useUndoableDelete.js`. Encapsula o padrão de remoção otimista + undo para reutilização em todas as páginas.
+O `undoable(message, onConfirm)` atual expõe apenas o callback de confirmação (executado quando o timer expira). Os hooks precisam de um callback de **cancelamento** (executado quando "Desfazer" é clicado) para reinserir o item no state.
+
+**Solução:** estender a assinatura para `undoable(message, onConfirm, onUndo?)`:
 
 ```js
-// Assinatura
-function useUndoableDelete(setItems, deleteFn, message = 'Item removido.')
-// Retorna: { removeWithUndo }
+// ToastContext.jsx — alteração em undoable()
+const undoable = useCallback((message, onConfirm, onUndo) => {
+  const id = ++toastId;
+  setToasts((prev) => [...prev, { id, message, type: 'undo', onConfirm, onUndo }]);
+  timersRef.current[id] = setTimeout(() => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+    delete timersRef.current[id];
+    try { onConfirm(); } catch (_) {}
+  }, duration);
+}, []);
 
-// Para ações de status (concluir, won, lost):
-function useUndoableAction(setItems, actionFn, message)
-// Retorna: { executeWithUndo }
+// handleUndo — chamar onUndo se fornecido
+const handleUndo = useCallback((id) => {
+  clearTimeout(timersRef.current[id]);
+  delete timersRef.current[id];
+  setToasts((prev) => {
+    const toast = prev.find((t) => t.id === id);
+    if (toast?.onUndo) try { toast.onUndo(); } catch (_) {}
+    return prev.filter((t) => t.id !== id);
+  });
+}, []);
 ```
 
-**Lógica interna:** ao acionar, o item é removido do state e armazenado em um `ref`. Se o usuário clicar "Desfazer", o item é reinserido na posição original. Ao expirar o timer, `deleteFn(id)` é chamado.
+### Hooks
 
-### Operações que receberão undo
+#### `useUndoableDelete` — para remoção de itens de listas planas
 
-| Página | Operação |
-|--------|----------|
-| `LeadsPage` | delete lead |
-| `LeadDetailsPage` | delete lead |
-| `ContactsPage` | delete contato |
-| `ContactDetailsPage` | delete contato |
-| `DealsPage` | delete deal, fechar como won, fechar como lost |
-| `DealDetailsModal` | delete deal, won, lost |
-| `ActivitiesPage` | delete atividade, marcar como concluída |
-| `MetasPage` | delete meta |
-| `MetaDetailsPage` | delete meta |
+```js
+// src/hooks/useUndoableDelete.js
+function useUndoableDelete(setItems, deleteFn, message = 'Item removido.')
+// Retorna: { removeWithUndo(id, items) }
+//   items: lista atual (para capturar índice e valor antes de remover)
+```
 
-### Arquivos alterados (frontend)
+**Lógica interna com flag de cancelamento:**
+```js
+function removeWithUndo(id, items) {
+  const idx = items.findIndex(i => i.id === id || i._id === id);
+  const item = items[idx];
+  // Remove otimisticamente
+  setItems(prev => prev.filter(i => (i.id ?? i._id) !== id));
+  // onUndo: reinssere na posição original
+  const onUndo = () => setItems(prev => {
+    const copy = [...prev];
+    copy.splice(idx, 0, item);
+    return copy;
+  });
+  undoable(message, () => deleteFn(id), onUndo);
+}
+```
 
-- `src/hooks/useUndoableDelete.js` — novo hook
-- Todos os arquivos de página listados acima
+#### `useUndoableAction` — para mudanças de status em listas planas
+
+```js
+// src/hooks/useUndoableAction.js
+function useUndoableAction(setItems, actionFn, message)
+// Retorna: { executeWithUndo(item, applyFn) }
+//   applyFn: função que transforma o item no novo estado para aplicar otimisticamente
+```
+
+**Lógica interna:**
+```js
+function executeWithUndo(item, applyFn) {
+  const original = item;
+  // Aplica mudança otimisticamente
+  setItems(prev => prev.map(i => (i.id ?? i._id) === (item.id ?? item._id) ? applyFn(i) : i));
+  // onUndo: reverte para o estado original
+  const onUndo = () => setItems(prev => prev.map(i => (i.id ?? i._id) === (item.id ?? item._id) ? original : i));
+  undoable(message, () => actionFn(item.id ?? item._id), onUndo);
+}
+```
+
+> **Deals (Kanban):** O state de deals é um objeto com chaves por stage `{ lead: [], contacted: [], ..., won: [], lost: [] }`, não uma lista plana. As ações de won/lost no `DealsPage` e `DealDetailsModal` usam implementação **bespoke** (não os hooks genéricos), operando diretamente sobre o objeto Kanban com `setKanban`. O rollback restaura o card na coluna de stage original usando `undoable(message, onConfirm, onUndo)` diretamente.
+
+> **Deals (Kanban):** O state de deals é um objeto com chaves por stage `{ lead: [], contacted: [], ..., won: [], lost: [] }`, não uma lista plana. As ações de won/lost no `DealsPage` e `DealDetailsModal` usam implementação **bespoke** (não o hook genérico), operando diretamente sobre o objeto Kanban com `setKanban`. O rollback restaura o card na coluna de stage original.
+
+### Serviços a criar/complementar no frontend
+
+Os services do frontend hoje não possuem funções de delete. Devem ser adicionadas:
+
+| Service | Função a adicionar |
+|---------|-------------------|
+| `src/services/lead.service.js` | `deleteLead(id)` → `DELETE /leads/:id` |
+| `src/services/contact.service.js` | `deleteContact(id)` → `DELETE /contacts/:id` |
+| `src/services/deal.service.js` | `deleteDeal(id)` → `DELETE /deals/:id`; `closeDeal(id, outcome)` → `PATCH /deals/:id/close` |
+| `src/services/activity.service.js` | `deleteActivity(id)` → `DELETE /activities/:id` |
+
+> `src/services/goal.service.js` já possui delete. `MetaDetailsPage` já usa `undoable()`.
+
+### Operações e páginas
+
+| Página | O que fazer | Undo |
+|--------|------------|------|
+| `LeadsPage` | Adicionar botão delete + `removeWithUndo` via hook | delete lead |
+| `LeadDetailsPage` | Adicionar botão delete + `removeWithUndo` (navega após confirm) | delete lead |
+| `ContactsPage` | Adicionar botão delete + `removeWithUndo` | delete contato |
+| `ContactDetailsPage` | Adicionar botão delete + `removeWithUndo` | delete contato |
+| `DealsPage` | Adicionar delete + won/lost com rollback Kanban bespoke | delete, won, lost |
+| `DealDetailsModal` | Adicionar delete + won/lost com rollback Kanban | delete, won, lost |
+| `ActivitiesPage` | Adicionar delete + wrapping do `completeActivity` existente | delete, concluir |
+| `MetasPage` | Adicionar botão delete + `removeWithUndo` | delete meta |
+| `MetaDetailsPage` | **Já implementado** — verificar e manter | — |
+
+### Arquivos a criar/alterar (frontend)
+
+- `src/hooks/useUndoableDelete.js` — novo
+- `src/hooks/useUndoableAction.js` — novo
+- `src/services/lead.service.js` — adicionar `deleteLead`
+- `src/services/contact.service.js` — adicionar `deleteContact`
+- `src/services/deal.service.js` — adicionar `deleteDeal`, `closeDeal`
+- `src/services/activity.service.js` — adicionar `deleteActivity`
+- `src/pages/leads/LeadsPage.jsx`
+- `src/pages/leads/LeadDetailsPage.jsx`
+- `src/pages/contacts/ContactsPage.jsx`
+- `src/pages/contacts/ContactDetailsPage.jsx`
+- `src/pages/deals/DealsPage.jsx`
+- `src/components/deals/DealDetailsModal.jsx`
+- `src/pages/activities/ActivitiesPage.jsx`
+- `src/pages/metas/MetasPage.jsx`
 
 ---
 
 ## Feature 2: Notificações Push via PWA (True Web Push com VAPID)
 
-### Contexto
+### Contexto e reconciliação com infraestrutura existente
 
-A infraestrutura de PWA já está configurada (Vite PWA plugin, manifesto, ícones). O sistema de notificações do backend já persiste no MongoDB e emite via Socket.IO. O objetivo é adicionar push nativo do OS que funcione mesmo com o browser em background ou fechado.
+O projeto já possui:
+- `src/utils/push-notifications.js` — utilitários: `isPushSupported()`, `requestPermission()`, `getPermissionStatus()`, `showNotification()`
+- `src/contexts/SocketContext.jsx` — já chama `showNotification()` quando `notification:new` chega e o tab está oculto, controlado por `localStorage.getItem('crm_push_enabled')`
+- `SettingsPage` (aba Preferências) — já tem toggle de push backed por `localStorage`
+
+Essa infraestrutura existente é **in-browser SW push** (funciona só com browser aberto). O objetivo desta feature é adicionar **True Web Push via VAPID** (funciona com browser fechado).
+
+**Estratégia de coexistência:**
+- O toggle existente em Settings e a lógica do `SocketContext` são mantidos como estão (push em foreground via Socket.IO)
+- O `PushNotificationContext` novo gerencia exclusivamente a subscription VAPID (push em background/browser fechado)
+- A verificação de suporte usa `isPushSupported()` existente + checagem adicional de `'PushManager' in window`
+- Ao usuário ativar notificações (já existente), também registra a subscription VAPID no backend
 
 ### Arquitetura
 
@@ -69,107 +178,168 @@ A infraestrutura de PWA já está configurada (Vite PWA plugin, manifesto, ícon
 Browser                        Backend                    MongoDB
 ───────                        ───────                    ───────
 PushNotificationContext
-  ↓ serviceWorker.subscribe()
+  ↓ PushManager.subscribe(vapidPublicKey)
   ↓ POST /api/push/subscribe ──────────────────────────→ push_subscriptions
 
 (evento ocorre no sistema)
                                notificationService.notify()
                                  ↓ salva Notification ──→ notifications
-                                 ↓ Socket.IO emit (existente)
+                                 ↓ Socket.IO emit (existente, inalterado)
                                  ↓ pushService.send(userId)
                                    ↓ busca subscriptions do userId
                                    ↓ web-push.sendNotification()
 SW recebe evento 'push' ←──────────────────────────────────────────
   ↓ self.registration.showNotification()
-OS exibe notificação nativa
+OS exibe notificação nativa (mesmo com browser fechado)
 ```
 
 ### Backend — novo módulo `push-subscriptions`
 
 **Instalação:** `npm install web-push`
+> O backend usa `"type": "commonjs"` (confirmado no `package.json`), portanto `require('web-push')` funciona normalmente.
 
-**Geração de chaves VAPID (uma única vez):**
+**Geração de chaves VAPID (uma única vez, salvar em `.env`):**
+```bash
+node -e "const wp=require('web-push'); console.log(wp.generateVAPIDKeys())"
 ```
-node -e "const wp=require('web-push'); const k=wp.generateVAPIDKeys(); console.log(k)"
-```
-Salvar em `.env`:
-```
+```env
 VAPID_PUBLIC_KEY=...
 VAPID_PRIVATE_KEY=...
 VAPID_SUBJECT=mailto:admin@crm.com
 ```
 
-**Model `PushSubscription`:**
+**Model `PushSubscription` (`push-subscription.model.js`):**
 ```js
 {
-  userId: ObjectId (ref: User),
-  endpoint: String (unique por usuário+endpoint),
-  keys: { p256dh: String, auth: String },
+  userId: ObjectId (ref: User, required),
+  endpoint: String (required, trim),
+  keys: {
+    p256dh: String (required),
+    auth: String (required)
+  },
   userAgent: String,
   timestamps: true
 }
+// Index: { userId: 1, endpoint: 1 } unique
 ```
 
 **Rotas (`/api/push`):**
-- `GET /vapid-public-key` — retorna `VAPID_PUBLIC_KEY` (público, sem auth)
-- `POST /subscribe` — salva ou atualiza subscription do usuário autenticado
-- `DELETE /subscribe` — remove subscription pelo endpoint
+- `GET /vapid-public-key` — retorna `{ publicKey: VAPID_PUBLIC_KEY }` (sem authMiddleware — necessário antes do login)
+- `POST /subscribe` — (authMiddleware) upsert subscription pelo endpoint; body: `{ endpoint, keys: { p256dh, auth }, userAgent }`
+- `DELETE /subscribe` — (authMiddleware) chama `pushSubscription.unsubscribe()` no browser **antes** desta chamada; body: `{ endpoint }`
 
 **`pushService.send(userId, title, body, data)`:**
-- Busca todas subscriptions ativas do userId
-- Chama `webPush.sendNotification()` para cada uma
-- Em caso de erro 410/404 (subscription expirada), remove do banco automaticamente
+- Busca todas subscriptions do userId
+- Para cada subscription, chama `webPush.sendNotification(subscription, JSON.stringify({ title, body, data }))`
+- Erros 410/404 (subscription expirada): remove do banco automaticamente (não relança erro)
+- Demais erros: loga mas não interrompe o `notify()` principal
 
 **Integração em `notificationService.notify()`:**
 ```js
-// Após emitir Socket.IO, adiciona:
-await pushService.send(userId, notification.title, notification.message, {
+// Após o emit Socket.IO já existente, adiciona (fire-and-forget):
+pushService.send(userId, notification.title, notification.message, {
   entityType: data.entityType,
   entityId: data.entityId
-});
+}).catch(err => console.error('Push send error:', err.message));
 ```
 
 ### Frontend
 
-**`src/contexts/PushNotificationContext.jsx`:**
-- Expõe: `isSupported`, `permission`, `isSubscribed`, `requestPermission()`
-- No mount: busca chave pública via `GET /api/push/vapid-public-key`
-- Se `permission === 'granted'` e SW disponível: inscreve automaticamente e envia ao backend
-- Ao revogar: chama `DELETE /api/push/subscribe`
+#### `PushNotificationContext` (`src/contexts/PushNotificationContext.jsx`)
 
-**Integração na árvore de providers (`src/main.jsx`):**
+Expõe: `isVapidSupported`, `isSubscribed`, `subscribeToPush()`, `unsubscribeFromPush()`
+
+**`isVapidSupported`:** `'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window`
+
+**Fluxo de subscription:**
+1. Busca chave pública: `GET /api/push/vapid-public-key`
+2. `const reg = await navigator.serviceWorker.ready`
+3. `const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) })`
+4. `POST /api/push/subscribe` com `{ endpoint: sub.endpoint, keys: { p256dh, auth }, userAgent }`
+
+**Fluxo de revogação:**
+1. `sub.unsubscribe()` — remove do browser/push service primeiro
+2. `DELETE /api/push/subscribe` com `{ endpoint }`
+
+**Quando ativar:** o contexto observa `localStorage.crm_push_enabled`. Quando o toggle existente em Settings for ativado e `permission === 'granted'`, o `PushNotificationContext` automaticamente chama `subscribeToPush()`.
+
+#### Árvore de providers (`src/main.jsx`) — ordem completa
+
 ```jsx
-<PushNotificationProvider>
-  <App />
-</PushNotificationProvider>
+<BrowserRouter>
+  <ThemeProvider>
+    <AuthProvider>
+      <SocketProvider>
+        <ToastProvider>
+          <PushNotificationProvider>   {/* ← novo, dentro de Auth e Toast */}
+            <App />
+          </PushNotificationProvider>
+        </ToastProvider>
+      </SocketProvider>
+    </AuthProvider>
+  </ThemeProvider>
+</BrowserRouter>
 ```
 
-**UI em `SettingsPage` (aba Preferências):**
-- Se `!isSupported`: mensagem "Seu navegador não suporta notificações push"
-- Se `permission === 'default'`: botão "Ativar notificações push"
-- Se `permission === 'granted'` e `isSubscribed`: badge verde "Notificações ativas"
-- Se `permission === 'denied'`: instrução para habilitar manualmente no browser
+> Deve estar dentro de `AuthProvider` (precisa do token para chamar `/api/push/subscribe`) e dentro de `ToastProvider` (para exibir erros de permissão).
+
+#### UI em `SettingsPage` (aba Preferências)
+
+O toggle existente de push é mantido. Adicionar abaixo dele:
+- Se `!isVapidSupported`: nenhuma UI adicional (funcionalidade não disponível)
+- Se `isSubscribed`: badge "Push nativo ativo" (verde)
+- Se toggle ativo + `permission === 'granted'` + `!isSubscribed`: botão "Ativar notificação nativa" (aciona `subscribeToPush()`)
+
+#### `src/services/push.service.js`
+
+```js
+export const getVapidPublicKey = () => api.get('/push/vapid-public-key')
+export const subscribe = (data) => api.post('/push/subscribe', data)
+export const unsubscribe = (endpoint) => api.delete('/push/subscribe', { data: { endpoint } })
+```
 
 ### Service Worker personalizado (`src/sw.js`)
 
-Vite PWA muda de `generateSW` para `injectManifest` para permitir SW customizado:
+O Vite PWA muda de `generateSW` (padrão atual) para `injectManifest`. **Atenção:** ao migrar, o bloco `workbox` de `vite.config.js` (com `runtimeCaching`) é ignorado — essas regras devem ser portadas manualmente para `src/sw.js`.
 
+**`vite.config.js` — ajuste:**
 ```js
-// vite.config.js — ajuste na estratégia
 VitePWA({
   strategies: 'injectManifest',
   srcDir: 'src',
   filename: 'sw.js',
-  // ... resto igual
+  manifest: { /* igual ao atual */ }
+  // bloco workbox: removido (portado para src/sw.js)
 })
 ```
 
-**`src/sw.js`:**
+**`src/sw.js` — completo (incluindo runtime caching portado):**
 ```js
 import { precacheAndRoute } from 'workbox-precaching';
+import { registerRoute } from 'workbox-routing';
+import { NetworkFirst, CacheFirst } from 'workbox-strategies';
+import { ExpirationPlugin } from 'workbox-expiration';
 
-precacheAndRoute(self.__WB_MANIFEST); // injetado pelo Vite PWA
+// Precache (injetado pelo Vite PWA)
+precacheAndRoute(self.__WB_MANIFEST);
 
+// Runtime caching — portado do vite.config.js anterior
+registerRoute(
+  ({ url }) => /^https?:\/\/.*\/api\/.*/i.test(url.href),
+  new NetworkFirst({
+    cacheName: 'api-cache',
+    plugins: [new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 5 })]
+  })
+);
+registerRoute(
+  ({ url }) => /^https:\/\/fonts\.googleapis\.com\/.*/i.test(url.href),
+  new CacheFirst({
+    cacheName: 'google-fonts-cache',
+    plugins: [new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 })]
+  })
+);
+
+// Push handler
 self.addEventListener('push', (event) => {
   const data = event.data?.json() ?? {};
   event.waitUntil(
@@ -182,45 +352,55 @@ self.addEventListener('push', (event) => {
   );
 });
 
+// Notification click — navega para a entidade
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
+  const { entityType, entityId } = event.notification.data ?? {};
+  const urlMap = { deal: 'deals', lead: 'leads', contact: 'contacts', activity: 'activities', conversation: 'whatsapp' };
+  const path = entityType && entityId ? `/${urlMap[entityType] ?? entityType}/${entityId}` : '/';
+
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      if (list.length > 0) return list[0].focus();
-      return clients.openWindow('/');
+      // Se há janela aberta, navega para o path correto e foca (não apenas foca)
+      if (list.length > 0) {
+        list[0].navigate(path);
+        return list[0].focus();
+      }
+      return clients.openWindow(path);
     })
   );
 });
 ```
 
-### Arquivos alterados/criados
+### Arquivos a criar/alterar
 
 **Backend (`crm-backend`):**
-- `src/modules/push-subscriptions/push-subscription.model.js`
-- `src/modules/push-subscriptions/push-subscription.repository.js`
-- `src/modules/push-subscriptions/push-subscription.service.js`
-- `src/modules/push-subscriptions/push-subscription.controller.js`
-- `src/modules/push-subscriptions/push-subscription.routes.js`
-- `src/modules/notifications/notification.service.js` — integrar push
+- `src/modules/push-subscriptions/push-subscription.model.js` — novo
+- `src/modules/push-subscriptions/push-subscription.repository.js` — novo
+- `src/modules/push-subscriptions/push-subscription.service.js` — novo
+- `src/modules/push-subscriptions/push-subscription.controller.js` — novo
+- `src/modules/push-subscriptions/push-subscription.routes.js` — novo
+- `src/modules/notifications/notification.service.js` — integrar `pushService.send()`
 - `src/app.js` — registrar rotas `/api/push`
-- `.env` — adicionar VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+- `.env` — adicionar `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`
 
 **Frontend (`crm-frontend`):**
-- `src/sw.js` — service worker personalizado
-- `src/contexts/PushNotificationContext.jsx`
-- `src/services/push.service.js` — chamadas à API de push
-- `src/main.jsx` — adicionar provider
-- `src/pages/settings/SettingsPage.jsx` — UI na aba Preferências
-- `vite.config.js` — mudar para estratégia `injectManifest`
+- `src/sw.js` — novo (service worker personalizado com workbox + push + notificationclick)
+- `src/contexts/PushNotificationContext.jsx` — novo
+- `src/services/push.service.js` — novo
+- `src/main.jsx` — adicionar `PushNotificationProvider`
+- `src/pages/settings/SettingsPage.jsx` — UI adicional na aba Preferências
+- `vite.config.js` — migrar para `injectManifest`
 
 ---
 
-## Ordem de implementação sugerida
+## Ordem de implementação
 
-1. **Feature 1** — toast undo (zero risco, só frontend)
-   - Criar `useUndoableDelete`
-   - Integrar em todas as páginas
+1. **Feature 1 — Toast undo**
+   - Criar `useUndoableDelete` e `useUndoableAction`
+   - Adicionar funções de delete nos services do frontend
+   - Integrar em todas as páginas listadas
 
-2. **Feature 2** — push notifications
-   - Backend: instalar web-push, criar módulo, integrar no notification service
-   - Frontend: SW customizado, PushNotificationContext, UI em Settings
+2. **Feature 2 — Push notifications**
+   - Backend: instalar `web-push`, gerar VAPID keys, criar módulo `push-subscriptions`, integrar em `notification.service`
+   - Frontend: criar `src/sw.js` com workbox portado + push handlers, migrar `vite.config.js`, criar `PushNotificationContext`, atualizar `SettingsPage`
