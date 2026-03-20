@@ -1,4 +1,4 @@
-import { createContext, useCallback, useMemo, useState } from 'react';
+import { createContext, useCallback, useMemo, useRef, useState } from 'react';
 
 export const ToastContext = createContext(null);
 
@@ -6,8 +6,11 @@ let toastId = 0;
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const timersRef = useRef({});
 
   const removeToast = useCallback((id) => {
+    clearTimeout(timersRef.current[id]);
+    delete timersRef.current[id];
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
@@ -16,10 +19,32 @@ export function ToastProvider({ children }) {
 
     setToasts((prev) => [...prev, { id, message, type }]);
 
-    setTimeout(() => {
+    timersRef.current[id] = setTimeout(() => {
       removeToast(id);
     }, duration);
   }, [removeToast]);
+
+  const undoable = useCallback((message, onConfirm, onUndo, duration = 5000) => {
+    const id = ++toastId;
+
+    setToasts((prev) => [...prev, { id, message, type: 'undo', onConfirm, onUndo }]);
+
+    timersRef.current[id] = setTimeout(() => {
+      setToasts((prev) => prev.filter((toast) => toast.id !== id));
+      delete timersRef.current[id];
+      try { onConfirm(); } catch (_) { /* ignore */ }
+    }, duration);
+  }, []);
+
+  const handleUndo = useCallback((id) => {
+    clearTimeout(timersRef.current[id]);
+    delete timersRef.current[id];
+    setToasts((prev) => {
+      const toast = prev.find((t) => t.id === id);
+      if (toast?.onUndo) try { toast.onUndo(); } catch (_) { /* ignore */ }
+      return prev.filter((t) => t.id !== id);
+    });
+  }, []);
 
   const success = useCallback((message) => {
     showToast(message, 'success');
@@ -38,9 +63,10 @@ export function ToastProvider({ children }) {
       showToast,
       success,
       error,
-      info
+      info,
+      undoable
     }),
-    [showToast, success, error, info]
+    [showToast, success, error, info, undoable]
   );
 
   return (
@@ -51,9 +77,20 @@ export function ToastProvider({ children }) {
           <div
             key={toast.id}
             className={`toast toast-${toast.type}`}
-            onClick={() => removeToast(toast.id)}
+            onClick={() => toast.type !== 'undo' && removeToast(toast.id)}
           >
-            {toast.message}
+            <span>{toast.message}</span>
+            {toast.type === 'undo' && (
+              <button
+                className="toast-undo-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleUndo(toast.id);
+                }}
+              >
+                Desfazer
+              </button>
+            )}
           </div>
         ))}
       </div>
