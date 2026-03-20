@@ -15,7 +15,27 @@ export async function getKanban() {
   return response.data;
 }
 
+export async function getDealById(dealId) {
+  const response = await api.get(`/deals/${dealId}`);
+  return response.data;
+}
+
 export async function updateDealStage(dealId, stage) {
   const response = await api.patch(`/deals/${dealId}/stage`, { stage });
+  return response.data;
+}
+
+export async function deleteDeal(id) {
+  const response = await api.delete(`/deals/${id}`);
+  return response.data;
+}
+
+export async function closeDealWon(id) {
+  const response = await api.patch(`/deals/${id}/close-won`);
+  return response.data;
+}
+
+export async function closeDealLost(id, reason = '') {
+  const response = await api.patch(`/deals/${id}/close-lost`, reason ? { reason } : {});
   return response.data;
 }
