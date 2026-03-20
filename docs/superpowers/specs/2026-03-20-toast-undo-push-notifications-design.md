@@ -30,11 +30,13 @@ O trabalho restante é:
 
 O `undoable(message, onConfirm)` atual expõe apenas o callback de confirmação (executado quando o timer expira). Os hooks precisam de um callback de **cancelamento** (executado quando "Desfazer" é clicado) para reinserir o item no state.
 
-**Solução:** estender a assinatura para `undoable(message, onConfirm, onUndo?)`:
+**Solução:** estender a assinatura para `undoable(message, onConfirm, onUndo?, duration = 5000)`.
+
+> A assinatura atual é `(message, onConfirm, duration = 5000)`. O terceiro parâmetro `duration` é deslocado para quarto. Todos os call sites existentes (2 argumentos) continuam funcionando. `duration` agora é parâmetro com default, não variável de closure — sem `ReferenceError`.
 
 ```js
 // ToastContext.jsx — alteração em undoable()
-const undoable = useCallback((message, onConfirm, onUndo) => {
+const undoable = useCallback((message, onConfirm, onUndo, duration = 5000) => {
   const id = ++toastId;
   setToasts((prev) => [...prev, { id, message, type: 'undo', onConfirm, onUndo }]);
   timersRef.current[id] = setTimeout(() => {
@@ -67,19 +69,28 @@ function useUndoableDelete(setItems, deleteFn, message = 'Item removido.')
 //   items: lista atual (para capturar índice e valor antes de remover)
 ```
 
-**Lógica interna com flag de cancelamento:**
+**Lógica interna:**
 ```js
 function removeWithUndo(id, items) {
-  const idx = items.findIndex(i => i.id === id || i._id === id);
-  const item = items[idx];
-  // Remove otimisticamente
+  const deletedIdx = items.findIndex(i => (i.id ?? i._id) === id);
+  const deletedItem = items[deletedIdx];
+  // Captura o item que vem após o deletado (âncora para reinserção)
+  // Usar âncora em vez de índice numérico evita posição errada se
+  // outra deleção ocorrer durante os 5s do timer.
+  const nextSibling = items[deletedIdx + 1] ?? null;
+  const nextSiblingId = nextSibling ? (nextSibling.id ?? nextSibling._id) : null;
+
   setItems(prev => prev.filter(i => (i.id ?? i._id) !== id));
-  // onUndo: reinssere na posição original
+
   const onUndo = () => setItems(prev => {
+    if (!nextSiblingId) return [...prev, deletedItem]; // era o último
+    const anchorIdx = prev.findIndex(i => (i.id ?? i._id) === nextSiblingId);
+    if (anchorIdx === -1) return [...prev, deletedItem]; // âncora também foi deletada
     const copy = [...prev];
-    copy.splice(idx, 0, item);
+    copy.splice(anchorIdx, 0, deletedItem);
     return copy;
   });
+
   undoable(message, () => deleteFn(id), onUndo);
 }
 ```
@@ -265,23 +276,27 @@ Expõe: `isVapidSupported`, `isSubscribed`, `subscribeToPush()`, `unsubscribeFro
 
 #### Árvore de providers (`src/main.jsx`) — ordem completa
 
+Apenas `PushNotificationProvider` é adicionado. A árvore existente é mantida integralmente:
+
 ```jsx
-<BrowserRouter>
-  <ThemeProvider>
-    <AuthProvider>
-      <SocketProvider>
-        <ToastProvider>
-          <PushNotificationProvider>   {/* ← novo, dentro de Auth e Toast */}
-            <App />
-          </PushNotificationProvider>
-        </ToastProvider>
-      </SocketProvider>
-    </AuthProvider>
-  </ThemeProvider>
-</BrowserRouter>
+<React.StrictMode>
+  <BrowserRouter>
+    <ThemeProvider>
+      <AuthProvider>
+        <SocketProvider>
+          <ToastProvider>
+            <PushNotificationProvider>   {/* ← único novo provider */}
+              <App />
+            </PushNotificationProvider>
+          </ToastProvider>
+        </SocketProvider>
+      </AuthProvider>
+    </ThemeProvider>
+  </BrowserRouter>
+</React.StrictMode>
 ```
 
-> Deve estar dentro de `AuthProvider` (precisa do token para chamar `/api/push/subscribe`) e dentro de `ToastProvider` (para exibir erros de permissão).
+> `PushNotificationProvider` deve estar dentro de `AuthProvider` (precisa do token JWT para `POST /api/push/subscribe`) e dentro de `ToastProvider` (para exibir erros de permissão via `toast.error`). `ThemeProvider`, `BrowserRouter` e `React.StrictMode` são mantidos sem alteração.
 
 #### UI em `SettingsPage` (aba Preferências)
 
