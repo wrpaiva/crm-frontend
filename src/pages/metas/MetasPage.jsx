@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getGoals, getGoalsSummary } from '../../services/goal.service';
+import { getGoals, getGoalsSummary, deleteGoal } from '../../services/goal.service';
 import { useToast } from '../../hooks/useToast';
+import { useUndoableDelete } from '../../hooks/useUndoableDelete';
 import { getErrorMessage } from '../../utils/http';
 import PageLoader from '../../components/common/PageLoader';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 
 const typeLabels = { monthly: 'Mensal', quarterly: 'Trimestral' };
 const categoryLabels = {
@@ -28,19 +30,20 @@ function MetasPage() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
   const [filterType, setFilterType] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [page]);
 
   async function loadData(type = filterType, category = filterCategory) {
     try {
       setLoading(true);
       setError('');
 
-      const params = {};
+      const params = { page, limit: 10 };
       if (type) params.type = type;
       if (category) params.category = category;
 
@@ -62,12 +65,19 @@ function MetasPage() {
 
   async function handleFilter(event) {
     event.preventDefault();
+    setPage(1);
     await loadData(filterType, filterCategory);
   }
 
   const goals = useMemo(() => {
     return response?.data || [];
   }, [response]);
+
+  const { removeWithUndo } = useUndoableDelete(
+    (updater) => setResponse((prev) => ({ ...prev, data: updater(prev?.data || []) })),
+    deleteGoal,
+    'Meta removida.'
+  );
 
   const meta = response?.meta || null;
 
@@ -170,6 +180,7 @@ function MetasPage() {
                 <th>Período</th>
                 <th>Progresso</th>
                 <th>Nível</th>
+                <th>Ações</th>
               </tr>
             </thead>
 
@@ -203,12 +214,26 @@ function MetasPage() {
                       {levelLabels[goal.level] || goal.level}
                     </span>
                   </td>
+
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        className="secondary-button"
+                        style={{ color: 'var(--accent-red, #ef4444)' }}
+                        onClick={() => removeWithUndo(goal.id ?? goal._id, goals)}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      <Pagination meta={meta} onPageChange={setPage} />
     </div>
   );
 }
