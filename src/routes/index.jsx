@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import LoginPage from '../pages/auth/LoginPage';
 import RegisterPage from '../pages/auth/RegisterPage';
 import DashboardPage from '../pages/dashboard/DashboardPage';
+import OperationalDashboardPage from '../pages/dashboard/OperationalDashboardPage';
 import LeadsPage from '../pages/leads/LeadsPage';
 import LeadDetailsPage from '../pages/leads/LeadDetailsPage';
 import ContactsPage from '../pages/contacts/ContactsPage';
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route index element={<Navigate to="/dashboard" replace />} />
 
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="dashboard/operational" element={<OperationalDashboardPage />} />
 
         <Route path="leads" element={<LeadsPage />} />
         <Route path="leads/new" element={<NewLeadPage />} />

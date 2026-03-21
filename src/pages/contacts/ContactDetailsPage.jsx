@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getContactById } from '../../services/contact.service';
+import { getContactById, deleteContact } from '../../services/contact.service';
+import { useToast } from '../../hooks/useToast';
 import HistoryTimeline from '../../components/common/HistoryTimeline';
 import FavoriteButton from '../../components/common/FavoriteButton';
+import FileUpload from '../../components/common/FileUpload';
 
 function ContactDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [contact, setContact] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -29,6 +32,15 @@ function ContactDetailsPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleDelete() {
+    toast.undoable(
+      'Contato removido.',
+      () => deleteContact(contact.id ?? contact._id).then(() => navigate('/contacts')),
+      null
+    );
+    navigate('/contacts');
   }
 
   if (loading) {
@@ -71,6 +83,14 @@ function ContactDetailsPage() {
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="secondary-button" onClick={() => navigate('/contacts')}>
             Voltar
+          </button>
+
+          <button
+            className="secondary-button"
+            style={{ color: 'var(--accent-red, #ef4444)' }}
+            onClick={handleDelete}
+          >
+            Remover Contato
           </button>
 
           <button
@@ -117,6 +137,11 @@ function ContactDetailsPage() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <h2>Anexos</h2>
+        <FileUpload entityType="contact" entityId={id} />
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>

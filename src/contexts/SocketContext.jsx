@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from '../hooks/useAuth';
+import { showNotification, isPushSupported } from '../utils/push-notifications';
 
 const SocketContext = createContext(null);
 
@@ -38,6 +39,17 @@ export function SocketProvider({ children }) {
 
     newSocket.on('disconnect', () => {
       setConnected(false);
+    });
+
+    newSocket.on('notification:new', (data) => {
+      const pushEnabled = localStorage.getItem('crm_push_enabled') === 'true';
+      if (pushEnabled && document.hidden && isPushSupported()) {
+        showNotification(data.title || 'Nova notificação', {
+          body: data.message || data.body || '',
+          tag: data.id || 'crm-notification',
+          data: { url: data.url }
+        });
+      }
     });
 
     setSocket(newSocket);

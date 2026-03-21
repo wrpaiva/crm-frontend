@@ -70,18 +70,16 @@ function MetaDetailsPage() {
     }
   }
 
-  async function handleDelete() {
-    if (!window.confirm('Tem certeza que deseja excluir esta meta?')) {
-      return;
-    }
-
-    try {
-      await deleteGoal(id);
-      toast.success('Meta removida com sucesso.');
-      navigate('/metas');
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao excluir meta.'));
-    }
+  function handleDelete() {
+    toast.undoable('Meta será excluída.', async () => {
+      try {
+        await deleteGoal(id);
+        toast.success('Meta removida com sucesso.');
+        navigate('/metas');
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Erro ao excluir meta.'));
+      }
+    });
   }
 
   if (loading) {

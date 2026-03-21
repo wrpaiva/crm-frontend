@@ -127,6 +127,22 @@
 - [x] Preenchimento de variáveis do template com preview do corpo
 - [x] Modal dedicado para seleção e envio de templates
 
+### AI Auto-Atendente WhatsApp
+- [x] Módulo ai-responder no backend (model, repository, service, controller, routes, validator, DTO)
+- [x] Configuração singleton (isActive, systemPrompt, maxMessages, responseDelay, qualifyThreshold, workingHours)
+- [x] Resposta automática via OpenAI (GPT-4o-mini) a mensagens inbound do WhatsApp
+- [x] Qualificação automática de leads via function calling (BANT: budget, need, urgency, authority)
+- [x] Atualização automática de score e status do lead quando qualificado (score >= 70)
+- [x] Controle de limite de mensagens por conversa com notificação ao vendedor
+- [x] Delay configurável de resposta para parecer mais natural
+- [x] Modo horário comercial (AI só atua fora do expediente)
+- [x] Ações manuais: transferir para humano e parar AI
+- [x] Notificações ao vendedor: lead qualificado pela AI, limite de mensagens atingido
+- [x] Emissão de eventos Socket.IO para atualização real-time no frontend
+- [x] Painel de configuração em Settings (aba AI Atendente) com toggle, prompt, limites e horários
+- [x] Seção AI Atendente na página de detalhes do lead com badge de status, dados BANT e botões de ação
+- [x] Seed de configuração padrão no bootstrap do servidor
+
 ### Infraestrutura
 - [x] Axios com interceptors (token, redirect 401)
 - [x] Rate limiting
@@ -147,38 +163,40 @@
 ### 3A — Fundação Comercial
 
 #### Pipeline Avançado
-- [ ] Card expandido com abas: Conversas, Informações do Lead, Histórico do Pipeline
-- [ ] Cards compactos com informações essenciais no Kanban
+- [x] Card expandido com abas: Conversas, Informações do Lead, Histórico do Pipeline
+- [x] Cards compactos com informações essenciais no Kanban
 
 #### Lead Scoring & Distribuição
 - [x] Lead scoring automático básico (regra simples configurável)
 - [x] Regras de distribuição: Round Robin e Manual
 - [x] Enriquecimento automático de lead (BrasilAPI — CNPJ/CPF)
+- [x] Qualificação e scoring automático via AI Atendente (BANT)
 
 #### Cadência & Automação
-- [ ] Cadência automática de 5 tentativas na etapa SDR Qualificando
-- [ ] Mudança automática para Lead Frio após cadência expirada
-- [ ] Agendamento via link integrado ao Google Calendar (criação de evento e lembretes 24h/1h)
+- [x] Cadência automática de 5 tentativas na etapa SDR Qualificando (auto-enrollment via triggerStatus)
+- [x] Mudança automática para Lead Frio após cadência expirada (processStep com onExpire + history)
+- [x] Agendamento via link integrado ao Google Calendar (OAuth2, criação de evento e lembretes 24h/1h)
 
 #### IA — Copiloto Comercial
-- [ ] Resumos automáticos de conversas e próximas ações sugeridas (OpenAI)
-- [ ] Respostas sugeridas editáveis com variáveis de template
-- [ ] Rankeamento de respostas por eficácia
+- [x] AI Auto-Atendente WhatsApp 24h com qualificação BANT automática
+- [x] Resumos automáticos de conversas e próximas ações sugeridas (OpenAI)
+- [x] Respostas sugeridas editáveis com variáveis de template
+- [x] Rankeamento de respostas por eficácia
 
 #### Dashboard Operacional
-- [ ] Métricas operacionais chave (taxa de reuniões, leads criados, leads esquecidos)
-- [ ] Relatórios avançados e exportes customizados (PDF/Excel)
-- [ ] Dashboard customizável com widgets drag & drop
+- [x] Métricas operacionais chave (taxa de reuniões, leads criados, leads esquecidos)
+- [x] Relatórios avançados e exportes customizados (PDF/Excel)
+- [x] Dashboard customizável com widgets drag & drop
 
 #### Notificações Avançadas
-- [ ] Toast com opção "desfazer" (undo)
-- [ ] Notificações push via PWA
+- [x] Toast com opção "desfazer" (undo)
+- [x] Notificações push via PWA
 
 #### Melhorias Gerais
-- [ ] Busca global — pesquisa unificada de leads, contatos, deals
-- [ ] Dark/Light mode toggle
-- [ ] Paginação no frontend em todas as listagens
-- [ ] Upload de arquivos — anexos em leads, contatos, deals
+- [x] Busca global — pesquisa unificada de leads, contatos, deals
+- [x] Dark/Light mode toggle
+- [x] Paginação no frontend em todas as listagens
+- [x] Upload de arquivos — anexos em leads, contatos, deals
 
 ---
 

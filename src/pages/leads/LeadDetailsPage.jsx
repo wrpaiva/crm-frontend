@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { convertLead, enrichLead, getLeadById, updateLeadStatus } from '../../services/lead.service';
+import { convertLead, deleteLead, enrichLead, getLeadById, updateLeadStatus } from '../../services/lead.service';
+import { useToast } from '../../hooks/useToast';
 import {
   getLeadEnrollment,
   enrollLead,
@@ -8,9 +9,17 @@ import {
   pauseEnrollment,
   resumeEnrollment
 } from '../../services/cadence.service';
+import {
+  getAiConversation,
+  transferToHuman,
+  stopAi
+} from '../../services/ai-responder.service';
+import { getConversations } from '../../services/whatsapp.service';
+import { createCalendarEvent, getConnectionStatus as getGoogleStatus } from '../../services/google-calendar.service';
 import HistoryTimeline from '../../components/common/HistoryTimeline';
 import FavoriteButton from '../../components/common/FavoriteButton';
 import ScoreBadge from '../../components/common/ScoreBadge';
+import FileUpload from '../../components/common/FileUpload';
 
 const statusLabels = {
   new: 'Novo',
@@ -35,6 +44,7 @@ const statusOptions = [
 function LeadDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
 
   const [lead, setLead] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,6 +54,10 @@ function LeadDetailsPage() {
   const [enrollment, setEnrollment] = useState(null);
   const [enrolling, setEnrolling] = useState(false);
   const [cadenceAction, setCadenceAction] = useState(false);
+  const [aiConversation, setAiConversation] = useState(null);
+  const [aiAction, setAiAction] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [calendarAction, setCalendarAction] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -64,6 +78,28 @@ function LeadDetailsPage() {
         setEnrollment(enrollmentData.data || null);
       } catch {
         setEnrollment(null);
+      }
+
+      // Load Google Calendar status (non-blocking)
+      try {
+        const googleData = await getGoogleStatus();
+        setGoogleConnected(googleData.data?.connected || false);
+      } catch {
+        setGoogleConnected(false);
+      }
+
+      // Load AI conversation (non-blocking) — find WhatsApp conversation for this lead
+      try {
+        const convData = await getConversations({ search: data.phone || '' });
+        const conversations = convData.data || [];
+        if (conversations.length > 0) {
+          const aiData = await getAiConversation(conversations[0].id);
+          setAiConversation(aiData.data || null);
+        } else {
+          setAiConversation(null);
+        }
+      } catch {
+        setAiConversation(null);
       }
     } catch (err) {
       console.error('Erro ao carregar lead:', err);
@@ -105,6 +141,15 @@ function LeadDetailsPage() {
     } finally {
       setConverting(false);
     }
+  }
+
+  function handleDelete() {
+    toast.undoable(
+      'Lead removido.',
+      () => deleteLead(lead.id ?? lead._id).then(() => navigate('/leads')),
+      null
+    );
+    navigate('/leads'); // navega imediatamente (optimistic)
   }
 
   async function handleEnrich() {
@@ -151,6 +196,55 @@ function LeadDetailsPage() {
       alert(err?.response?.data?.message || 'Erro ao executar ação de cadência.');
     } finally {
       setCadenceAction(false);
+    }
+  }
+
+  async function handleAiTransfer() {
+    if (!aiConversation) return;
+    try {
+      setAiAction(true);
+      await transferToHuman(aiConversation.conversationId);
+      await loadLead();
+    } catch (err) {
+      console.error('Erro ao transferir para humano:', err);
+      alert(err?.response?.data?.message || 'Erro ao transferir conversa.');
+    } finally {
+      setAiAction(false);
+    }
+  }
+
+  async function handleAiStop() {
+    if (!aiConversation) return;
+    try {
+      setAiAction(true);
+      await stopAi(aiConversation.conversationId);
+      await loadLead();
+    } catch (err) {
+      console.error('Erro ao parar AI:', err);
+      alert(err?.response?.data?.message || 'Erro ao parar AI.');
+    } finally {
+      setAiAction(false);
+    }
+  }
+
+  async function handleScheduleCalendar(step) {
+    try {
+      setCalendarAction(step.step);
+      const startDate = step.completedAt ? new Date(step.completedAt) : new Date();
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+
+      await createCalendarEvent({
+        title: `Cadência - ${lead?.name || 'Lead'} - Step ${step.step}`,
+        description: `Follow-up de cadência para o lead ${lead?.name || ''}.\nStep ${step.step}/${enrollment?.totalSteps || '?'}`,
+        startDateTime: startDate.toISOString(),
+        endDateTime: endDate.toISOString()
+      });
+      alert('Evento criado no Google Calendar com lembretes de 24h e 1h.');
+    } catch (err) {
+      console.error('Erro ao criar evento no Calendar:', err);
+      alert(err?.response?.data?.message || 'Erro ao criar evento no Google Calendar.');
+    } finally {
+      setCalendarAction(null);
     }
   }
 
@@ -282,6 +376,14 @@ function LeadDetailsPage() {
             disabled={converting || lead.status === 'won' || lead.status === 'lost'}
           >
             {converting ? 'Convertendo...' : 'Converter'}
+          </button>
+
+          <button
+            className="secondary-button"
+            style={{ color: 'var(--accent-red, #ef4444)' }}
+            onClick={handleDelete}
+          >
+            Remover Lead
           </button>
         </div>
       </div>
@@ -446,6 +548,16 @@ function LeadDetailsPage() {
                     <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                       {step.completedAt ? new Date(step.completedAt).toLocaleString('pt-BR') : ''}
                     </span>
+                    {googleConnected && (
+                      <button
+                        className="secondary-button"
+                        style={{ fontSize: 11, padding: '2px 8px', marginLeft: 8 }}
+                        onClick={() => handleScheduleCalendar(step)}
+                        disabled={calendarAction === step.step}
+                      >
+                        {calendarAction === step.step ? 'Agendando...' : 'Agendar no Calendar'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -454,6 +566,78 @@ function LeadDetailsPage() {
         ) : (
           <p style={{ color: 'var(--text-muted)' }}>Lead não está em cadência.</p>
         )}
+      </div>
+
+      {aiConversation && (
+        <div className="card" style={{ marginTop: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <h2 style={{ margin: 0 }}>AI Atendente</h2>
+              <span className={`ai-responder-badge ai-status-${aiConversation.status}`}>
+                {aiConversation.status === 'active' && 'AI Ativa'}
+                {aiConversation.status === 'qualified' && 'AI Qualificou'}
+                {aiConversation.status === 'transferred' && 'Transferida'}
+                {aiConversation.status === 'completed' && 'Concluída'}
+                {aiConversation.status === 'stopped' && 'Parada'}
+              </span>
+            </div>
+            {aiConversation.status === 'active' && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="primary-button"
+                  onClick={handleAiTransfer}
+                  disabled={aiAction}
+                  style={{ fontSize: 13 }}
+                >
+                  {aiAction ? 'Transferindo...' : 'Transferir para Humano'}
+                </button>
+                <button
+                  className="secondary-button"
+                  onClick={handleAiStop}
+                  disabled={aiAction}
+                  style={{ fontSize: 13 }}
+                >
+                  Parar AI
+                </button>
+              </div>
+            )}
+          </div>
+
+          {aiConversation.qualification && aiConversation.qualification.need && (
+            <div className="ai-responder-qualification">
+              <h4 style={{ margin: '0 0 12px 0' }}>Qualificação BANT</h4>
+              <div className="summary-list">
+                {aiConversation.qualification.need && (
+                  <SummaryRow label="Necessidade" value={aiConversation.qualification.need} />
+                )}
+                {aiConversation.qualification.budget && (
+                  <SummaryRow label="Orçamento" value={aiConversation.qualification.budget} />
+                )}
+                {aiConversation.qualification.urgency && (
+                  <SummaryRow label="Urgência" value={aiConversation.qualification.urgency} />
+                )}
+                {aiConversation.qualification.authority && (
+                  <SummaryRow label="Autoridade" value={aiConversation.qualification.authority} />
+                )}
+                {aiConversation.qualification.summary && (
+                  <SummaryRow label="Resumo" value={aiConversation.qualification.summary} />
+                )}
+                {aiConversation.qualification.score != null && (
+                  <SummaryRow label="Score AI" value={`${aiConversation.qualification.score}/100`} />
+                )}
+              </div>
+            </div>
+          )}
+
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 12 }}>
+            {aiConversation.messageCount} mensagens trocadas com a AI
+          </p>
+        </div>
+      )}
+
+      <div className="card" style={{ marginTop: 20 }}>
+        <h2>Anexos</h2>
+        <FileUpload entityType="lead" entityId={id} />
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>

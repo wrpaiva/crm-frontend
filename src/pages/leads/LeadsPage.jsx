@@ -2,14 +2,17 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   convertLead,
+  deleteLead,
   getLeads,
   updateLeadStatus
 } from '../../services/lead.service';
 import { useToast } from '../../hooks/useToast';
+import { useUndoableDelete } from '../../hooks/useUndoableDelete';
 import { getErrorMessage } from '../../utils/http';
 import PageLoader from '../../components/common/PageLoader';
 import EmptyState from '../../components/common/EmptyState';
 import ScoreBadge from '../../components/common/ScoreBadge';
+import Pagination from '../../components/common/Pagination';
 
 const statusLabels = {
   new: 'Novo',
@@ -40,6 +43,7 @@ function LeadsPage() {
   const [changingId, setChangingId] = useState(null);
   const [convertingId, setConvertingId] = useState(null);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     search: '',
     status: '',
@@ -51,7 +55,7 @@ function LeadsPage() {
   useEffect(() => {
     loadLeads();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page]);
 
   async function loadLeads(customFilters = filters) {
     try {
@@ -59,6 +63,8 @@ function LeadsPage() {
       setError('');
 
       const params = {
+        page,
+        limit: 10,
         ...(customFilters.search ? { search: customFilters.search } : {}),
         ...(customFilters.status ? { status: customFilters.status } : {}),
         ...(customFilters.source ? { source: customFilters.source } : {}),
@@ -79,6 +85,7 @@ function LeadsPage() {
 
   async function handleFilterSubmit(event) {
     event.preventDefault();
+    setPage(1);
     await loadLeads(filters);
   }
 
@@ -119,6 +126,12 @@ function LeadsPage() {
   const leads = useMemo(() => {
     return response?.data || [];
   }, [response]);
+
+  const { removeWithUndo } = useUndoableDelete(
+    (updater) => setResponse((prev) => ({ ...prev, data: updater(prev?.data || []) })),
+    deleteLead,
+    'Lead removido.'
+  );
 
   const meta = response?.meta || null;
 
@@ -306,6 +319,14 @@ function LeadsPage() {
                       >
                         {convertingId === lead.id ? 'Convertendo...' : 'Converter'}
                       </button>
+
+                      <button
+                        className="secondary-button"
+                        style={{ color: 'var(--accent-red, #ef4444)' }}
+                        onClick={() => removeWithUndo(lead.id ?? lead._id, leads)}
+                      >
+                        Remover
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -314,6 +335,8 @@ function LeadsPage() {
           </table>
         </div>
       )}
+
+      <Pagination meta={meta} onPageChange={setPage} />
     </div>
   );
 }

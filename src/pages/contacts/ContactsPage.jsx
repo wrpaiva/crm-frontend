@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { getContacts } from '../../services/contact.service';
+import { getContacts, deleteContact } from '../../services/contact.service';
 import { useToast } from '../../hooks/useToast';
+import { useUndoableDelete } from '../../hooks/useUndoableDelete';
 import { getErrorMessage } from '../../utils/http';
 import PageLoader from '../../components/common/PageLoader';
 import EmptyState from '../../components/common/EmptyState';
+import Pagination from '../../components/common/Pagination';
 
 function ContactsPage() {
   const navigate = useNavigate();
@@ -14,18 +16,19 @@ function ContactsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     loadContacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [page]);
 
   async function loadContacts(currentSearch = search) {
     try {
       setLoading(true);
       setError('');
 
-      const params = currentSearch ? { search: currentSearch } : {};
+      const params = { page, limit: 10, ...(currentSearch ? { search: currentSearch } : {}) };
       const data = await getContacts(params);
       setResponse(data);
     } catch (err) {
@@ -39,12 +42,19 @@ function ContactsPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+    setPage(1);
     await loadContacts(search);
   }
 
   const contacts = useMemo(() => {
     return response?.data || [];
   }, [response]);
+
+  const { removeWithUndo } = useUndoableDelete(
+    (updater) => setResponse((prev) => ({ ...prev, data: updater(prev?.data || []) })),
+    deleteContact,
+    'Contato removido.'
+  );
 
   const meta = response?.meta || null;
 
@@ -115,6 +125,7 @@ function ContactsPage() {
                 <th>E-mail</th>
                 <th>Telefone</th>
                 <th>Tags</th>
+                <th>Ações</th>
               </tr>
             </thead>
 
@@ -146,12 +157,26 @@ function ContactsPage() {
                       )}
                     </div>
                   </td>
+
+                  <td>
+                    <div className="table-actions">
+                      <button
+                        className="secondary-button"
+                        style={{ color: 'var(--accent-red, #ef4444)' }}
+                        onClick={() => removeWithUndo(contact.id ?? contact._id, contacts)}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      <Pagination meta={meta} onPageChange={setPage} />
     </div>
   );
 }

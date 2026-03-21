@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { usePushNotification } from '../../contexts/PushNotificationContext';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { getErrorMessage } from '../../utils/http';
@@ -37,6 +38,15 @@ import {
   getCadenceConfig,
   updateCadenceConfig
 } from '../../services/cadence.service';
+import {
+  getAiResponderConfig,
+  updateAiResponderConfig
+} from '../../services/ai-responder.service';
+import {
+  getAuthUrl as getGoogleAuthUrl,
+  getConnectionStatus as getGoogleStatus,
+  disconnectGoogle
+} from '../../services/google-calendar.service';
 import PageLoader from '../../components/common/PageLoader';
 
 const TABS = [
@@ -47,6 +57,7 @@ const TABS = [
   { key: 'scoring', label: 'Scoring', adminOnly: true },
   { key: 'distribution', label: 'Distribuição', adminOnly: true },
   { key: 'cadence', label: 'Cadência', adminOnly: true },
+  { key: 'ai-responder', label: 'AI Atendente', adminOnly: true },
   { key: 'preferences', label: 'Preferências' }
 ];
 
@@ -105,6 +116,9 @@ function SettingsPage() {
         )}
         {activeTab === 'cadence' && isAdminOrManager && (
           <CadencePanel toast={toast} />
+        )}
+        {activeTab === 'ai-responder' && isAdminOrManager && (
+          <AiResponderPanel toast={toast} />
         )}
         {activeTab === 'preferences' && <PreferencesPanel />}
       </div>
@@ -607,18 +621,19 @@ function PipelinePanel({ toast }) {
     }
   }
 
-  async function handleDeletePipeline() {
+  function handleDeletePipeline() {
     if (!selectedPipeline) return;
-    if (!window.confirm(`Remover pipeline "${selectedPipeline.name}" e todos os seus estágios?`)) return;
-    try {
-      await removePipeline(selectedPipeline._id);
-      toast.success('Pipeline removido.');
-      setSelectedPipeline(null);
-      setStages([]);
-      await loadPipelines();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao remover pipeline.'));
-    }
+    toast.undoable(`Pipeline "${selectedPipeline.name}" será removido.`, async () => {
+      try {
+        await removePipeline(selectedPipeline._id);
+        toast.success('Pipeline removido.');
+        setSelectedPipeline(null);
+        setStages([]);
+        await loadPipelines();
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Erro ao remover pipeline.'));
+      }
+    });
   }
 
   function openStageModal(stage = null) {
@@ -679,15 +694,16 @@ function PipelinePanel({ toast }) {
     }
   }
 
-  async function handleDeleteStage(stageId) {
-    if (!window.confirm('Remover este estágio?')) return;
-    try {
-      await removeStage(selectedPipeline._id, stageId);
-      toast.success('Estágio removido.');
-      await loadStages(selectedPipeline._id);
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao remover estágio.'));
-    }
+  function handleDeleteStage(stageId) {
+    toast.undoable('Estágio será removido.', async () => {
+      try {
+        await removeStage(selectedPipeline._id, stageId);
+        toast.success('Estágio removido.');
+        await loadStages(selectedPipeline._id);
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Erro ao remover estágio.'));
+      }
+    });
   }
 
   if (loading) return <PageLoader text="Carregando pipelines..." />;
@@ -995,15 +1011,16 @@ function ScoringPanel({ toast }) {
     }
   }
 
-  async function handleDelete(ruleId) {
-    if (!window.confirm('Remover esta regra de scoring?')) return;
-    try {
-      await deleteRule(ruleId);
-      toast.success('Regra removida.');
-      await loadRules();
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao remover regra.'));
-    }
+  function handleDelete(ruleId) {
+    toast.undoable('Regra de scoring será removida.', async () => {
+      try {
+        await deleteRule(ruleId);
+        toast.success('Regra removida.');
+        await loadRules();
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Erro ao remover regra.'));
+      }
+    });
   }
 
   async function handleRecalculate() {
@@ -1489,13 +1506,360 @@ function CadencePanel({ toast }) {
   );
 }
 
+// --- AI Responder Panel ---
+function AiResponderPanel({ toast }) {
+  const [config, setConfig] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    isActive: true,
+    systemPrompt: '',
+    maxMessages: 10,
+    responseDelay: 3000,
+    qualifyThreshold: 3,
+    workingHoursOnly: false,
+    workingHoursStart: '08:00',
+    workingHoursEnd: '18:00'
+  });
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  async function loadConfig() {
+    try {
+      setLoading(true);
+      const data = await getAiResponderConfig();
+      const cfg = data.data;
+      if (cfg) {
+        setConfig(cfg);
+        setForm({
+          isActive: cfg.isActive !== undefined ? cfg.isActive : true,
+          systemPrompt: cfg.systemPrompt || '',
+          maxMessages: cfg.maxMessages || 10,
+          responseDelay: cfg.responseDelay || 3000,
+          qualifyThreshold: cfg.qualifyThreshold || 3,
+          workingHoursOnly: cfg.workingHoursOnly || false,
+          workingHoursStart: cfg.workingHoursStart || '08:00',
+          workingHoursEnd: cfg.workingHoursEnd || '18:00'
+        });
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao carregar configuração do AI Atendente.'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      const result = await updateAiResponderConfig(form);
+      setConfig(result.data);
+      toast.success('Configuração do AI Atendente atualizada.');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao salvar configuração.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <PageLoader text="Carregando configuração do AI Atendente..." />;
+
+  return (
+    <div>
+      <h3 style={{ margin: '0 0 16px 0' }}>AI Atendente WhatsApp</h3>
+      <p className="muted-text" style={{ marginBottom: 20 }}>
+        Atendente automático com IA que responde leads via WhatsApp 24/7, coleta informações e qualifica automaticamente.
+      </p>
+
+      <form className="settings-form ai-responder-config" onSubmit={handleSubmit} style={{ maxWidth: 560 }}>
+        <div className="settings-form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+            />
+            AI Atendente ativo
+          </label>
+          <small>Quando ativo, a AI responde automaticamente mensagens recebidas via WhatsApp</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Prompt do Sistema</label>
+          <textarea
+            value={form.systemPrompt}
+            onChange={(e) => setForm((p) => ({ ...p, systemPrompt: e.target.value }))}
+            rows={8}
+            maxLength={2000}
+            placeholder="Instruções para a AI sobre como atender os leads..."
+            style={{ resize: 'vertical', minHeight: 120 }}
+          />
+          <small>{form.systemPrompt.length}/2000 caracteres</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Máximo de mensagens por conversa</label>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={form.maxMessages}
+            onChange={(e) => setForm((p) => ({ ...p, maxMessages: parseInt(e.target.value, 10) || 1 }))}
+          />
+          <small>Após atingir o limite, a AI para de responder e notifica o vendedor (1-50)</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Delay de resposta (ms)</label>
+          <input
+            type="number"
+            min="1000"
+            max="10000"
+            step="500"
+            value={form.responseDelay}
+            onChange={(e) => setForm((p) => ({ ...p, responseDelay: parseInt(e.target.value, 10) || 3000 }))}
+          />
+          <small>Tempo de espera antes de enviar a resposta, para parecer mais natural (1000-10000ms)</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label>Mensagens mínimas para qualificar</label>
+          <input
+            type="number"
+            min="1"
+            max="20"
+            value={form.qualifyThreshold}
+            onChange={(e) => setForm((p) => ({ ...p, qualifyThreshold: parseInt(e.target.value, 10) || 3 }))}
+          />
+          <small>Número mínimo de trocas antes da AI tentar qualificar o lead (1-20)</small>
+        </div>
+
+        <div className="settings-form-group">
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={form.workingHoursOnly}
+              onChange={(e) => setForm((p) => ({ ...p, workingHoursOnly: e.target.checked }))}
+            />
+            Apenas fora do horário comercial
+          </label>
+          <small>Se ativo, a AI só responde fora do horário comercial (dentro do horário, humanos atendem)</small>
+        </div>
+
+        {form.workingHoursOnly && (
+          <div style={{ display: 'flex', gap: 16 }}>
+            <div className="settings-form-group" style={{ flex: 1 }}>
+              <label>Início do expediente</label>
+              <input
+                type="time"
+                value={form.workingHoursStart}
+                onChange={(e) => setForm((p) => ({ ...p, workingHoursStart: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-group" style={{ flex: 1 }}>
+              <label>Fim do expediente</label>
+              <input
+                type="time"
+                value={form.workingHoursEnd}
+                onChange={(e) => setForm((p) => ({ ...p, workingHoursEnd: e.target.value }))}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="settings-form-actions">
+          <button type="submit" className="primary-button" disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar Configuração'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // --- Preferences Panel ---
 function PreferencesPanel() {
+  const toast = useToast();
+  const { isVapidSupported, isSubscribed, subscribeToPush, unsubscribeFromPush } = usePushNotification();
+  const [pushEnabled, setPushEnabled] = useState(
+    () => localStorage.getItem('crm_push_enabled') === 'true'
+  );
+  const [permissionStatus, setPermissionStatus] = useState(() => {
+    if (!('Notification' in window)) return 'unsupported';
+    return Notification.permission;
+  });
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(true);
+  const [googleAction, setGoogleAction] = useState(false);
+
+  useEffect(() => {
+    loadGoogleStatus();
+
+    function handleMessage(event) {
+      if (event.data?.type === 'google-connected') {
+        setGoogleConnected(true);
+        toast.success('Google Calendar conectado com sucesso!');
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  async function loadGoogleStatus() {
+    try {
+      const data = await getGoogleStatus();
+      setGoogleConnected(data.data?.connected || false);
+    } catch {
+      setGoogleConnected(false);
+    } finally {
+      setGoogleLoading(false);
+    }
+  }
+
+  async function handleConnectGoogle() {
+    try {
+      setGoogleAction(true);
+      const data = await getGoogleAuthUrl();
+      const url = data.data?.url;
+      if (url) {
+        window.open(url, 'google-auth', 'width=500,height=600,scrollbars=yes');
+      }
+    } catch (err) {
+      toast.error('Erro ao obter URL de autenticação do Google.');
+    } finally {
+      setGoogleAction(false);
+    }
+  }
+
+  async function handleDisconnectGoogle() {
+    try {
+      setGoogleAction(true);
+      await disconnectGoogle();
+      setGoogleConnected(false);
+      toast.success('Google Calendar desconectado.');
+    } catch (err) {
+      toast.error('Erro ao desconectar Google Calendar.');
+    } finally {
+      setGoogleAction(false);
+    }
+  }
+
+  async function handleTogglePush() {
+    if (permissionStatus === 'unsupported') {
+      toast.error('Seu navegador não suporta notificações push.');
+      return;
+    }
+
+    if (!pushEnabled) {
+      if (permissionStatus !== 'granted') {
+        const result = await Notification.requestPermission();
+        setPermissionStatus(result);
+        if (result !== 'granted') {
+          toast.error('Permissão de notificação negada pelo navegador.');
+          return;
+        }
+      }
+      localStorage.setItem('crm_push_enabled', 'true');
+      setPushEnabled(true);
+      toast.success('Notificações push ativadas.');
+    } else {
+      if (isSubscribed) {
+        await unsubscribeFromPush();
+      }
+      localStorage.setItem('crm_push_enabled', 'false');
+      setPushEnabled(false);
+      toast.info('Notificações push desativadas.');
+    }
+  }
+
+  const statusLabel = {
+    granted: 'Concedida',
+    denied: 'Negada',
+    default: 'Não solicitada',
+    unsupported: 'Não suportado'
+  };
+
   return (
-    <div className="settings-form">
-      <div className="settings-preferences-placeholder">
-        <h3>Preferências do Sistema</h3>
-        <p>Em breve você poderá personalizar o tema, notificações e outras preferências.</p>
+    <div className="settings-form" style={{ maxWidth: 480 }}>
+      <h3 style={{ margin: '0 0 16px 0' }}>Preferências do Sistema</h3>
+
+      <div className="settings-form-group">
+        <label style={{ fontWeight: 600, marginBottom: 4 }}>Notificações Push do Navegador</label>
+        <p className="muted-text" style={{ fontSize: 13, marginBottom: 12 }}>
+          Receba notificações mesmo quando o CRM não estiver em foco.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            className={pushEnabled ? 'secondary-button' : 'primary-button'}
+            onClick={handleTogglePush}
+          >
+            {pushEnabled ? 'Desativar Push' : 'Ativar Push'}
+          </button>
+          <span className="muted-text" style={{ fontSize: 13 }}>
+            Permissão: {statusLabel[permissionStatus] || permissionStatus}
+          </span>
+        </div>
+      </div>
+
+      {isVapidSupported && (
+        <div className="settings-form-group" style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-color, #333)' }}>
+          <label style={{ fontWeight: 600, marginBottom: 4 }}>Push nativo (background)</label>
+          <p className="muted-text" style={{ fontSize: 13, marginBottom: 12 }}>
+            Receba notificações mesmo com o CRM fechado
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {isSubscribed ? (
+              <span style={{ color: 'var(--accent-green, #22c55e)', fontWeight: 600, fontSize: 14 }}>Ativo</span>
+            ) : (
+              <button className="secondary-button" onClick={subscribeToPush}>
+                Ativar push nativo
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="settings-form-group" style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--border-color, #333)' }}>
+        <label style={{ fontWeight: 600, marginBottom: 4 }}>Google Calendar</label>
+        <p className="muted-text" style={{ fontSize: 13, marginBottom: 12 }}>
+          Conecte sua conta Google para agendar atividades diretamente no Google Calendar com lembretes automáticos.
+        </p>
+        {googleLoading ? (
+          <span className="muted-text" style={{ fontSize: 13 }}>Verificando conexão...</span>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {googleConnected ? (
+              <>
+                <span style={{ color: 'var(--accent-green, #22c55e)', fontWeight: 600, fontSize: 14 }}>
+                  Conectado
+                </span>
+                <button
+                  className="secondary-button"
+                  onClick={handleDisconnectGoogle}
+                  disabled={googleAction}
+                >
+                  {googleAction ? 'Desconectando...' : 'Desconectar'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="primary-button"
+                  onClick={handleConnectGoogle}
+                  disabled={googleAction}
+                >
+                  {googleAction ? 'Abrindo...' : 'Conectar Google Calendar'}
+                </button>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                  Desconectado
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

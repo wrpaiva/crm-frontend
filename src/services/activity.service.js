@@ -16,3 +16,8 @@ export async function completeActivity(activityId) {
   const response = await api.patch(`/activities/${activityId}/complete`);
   return response.data;
 }
+
+export async function deleteActivity(id) {
+  const response = await api.delete(`/activities/${id}`);
+  return response.data;
+}

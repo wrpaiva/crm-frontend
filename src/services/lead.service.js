@@ -34,3 +34,8 @@ export async function enrichLead(id) {
   const response = await api.post(`/leads/${id}/enrich`);
   return response.data;
 }
+
+export async function deleteLead(id) {
+  const response = await api.delete(`/leads/${id}`);
+  return response.data;
+}

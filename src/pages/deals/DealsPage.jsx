@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { getKanban, updateDealStage } from '../../services/deal.service';
+import { getKanban, updateDealStage, deleteDeal, closeDealWon, closeDealLost } from '../../services/deal.service';
 import DealDetailsModal from '../../components/deals/DealDetailsModal';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../../hooks/useToast';
 
 const stageLabels = {
   lead: 'Lead',
@@ -17,6 +18,7 @@ const stageOrder = ['lead', 'contacted', 'proposal', 'negotiation', 'won', 'lost
 
 function DealsPage() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [kanban, setKanban] = useState({
     lead: [],
     contacted: [],
@@ -141,6 +143,72 @@ function DealsPage() {
     setSelectedDeal(deal);
   }
 
+  function handleDeleteDeal(deal) {
+    const dealId = deal.id ?? deal._id;
+    const stage = deal.stage;
+
+    setKanban((prev) => ({
+      ...prev,
+      [stage]: prev[stage].filter((d) => (d.id ?? d._id) !== dealId)
+    }));
+
+    if (selectedDeal && (selectedDeal.id ?? selectedDeal._id) === dealId) {
+      setSelectedDeal(null);
+    }
+
+    const onUndo = () =>
+      setKanban((prev) => ({
+        ...prev,
+        [stage]: [...(prev[stage] || []), deal]
+      }));
+
+    toast.undoable('Negócio removido.', () => deleteDeal(dealId), onUndo);
+  }
+
+  function handleCloseDealWon(deal) {
+    const dealId = deal.id ?? deal._id;
+    const originalStage = deal.stage;
+
+    setKanban((prev) => {
+      const without = { ...prev, [originalStage]: prev[originalStage].filter((d) => (d.id ?? d._id) !== dealId) };
+      return { ...without, won: [...(without.won || []), { ...deal, stage: 'won' }] };
+    });
+
+    if (selectedDeal && (selectedDeal.id ?? selectedDeal._id) === dealId) {
+      setSelectedDeal((prev) => prev ? { ...prev, stage: 'won' } : prev);
+    }
+
+    const onUndo = () =>
+      setKanban((prev) => {
+        const without = { ...prev, won: prev.won.filter((d) => (d.id ?? d._id) !== dealId) };
+        return { ...without, [originalStage]: [...(without[originalStage] || []), deal] };
+      });
+
+    toast.undoable('Negócio marcado como ganho.', () => closeDealWon(dealId), onUndo);
+  }
+
+  function handleCloseDealLost(deal, reason = '') {
+    const dealId = deal.id ?? deal._id;
+    const originalStage = deal.stage;
+
+    setKanban((prev) => {
+      const without = { ...prev, [originalStage]: prev[originalStage].filter((d) => (d.id ?? d._id) !== dealId) };
+      return { ...without, lost: [...(without.lost || []), { ...deal, stage: 'lost' }] };
+    });
+
+    if (selectedDeal && (selectedDeal.id ?? selectedDeal._id) === dealId) {
+      setSelectedDeal((prev) => prev ? { ...prev, stage: 'lost' } : prev);
+    }
+
+    const onUndo = () =>
+      setKanban((prev) => {
+        const without = { ...prev, lost: prev.lost.filter((d) => (d.id ?? d._id) !== dealId) };
+        return { ...without, [originalStage]: [...(without[originalStage] || []), deal] };
+      });
+
+    toast.undoable('Negócio marcado como perdido.', () => closeDealLost(dealId, reason), onUndo);
+  }
+
   if (loading) {
     return (
       <div>
@@ -212,53 +280,68 @@ function DealsPage() {
                               ref={providedDraggable.innerRef}
                               {...providedDraggable.draggableProps}
                               {...providedDraggable.dragHandleProps}
-                              className={`deal-card ${
+                              className={`deal-card deal-card-compact ${
                                 snapshotDraggable.isDragging ? 'dragging' : ''
                               } ${
                                 movingId === deal.id ? 'deal-card-updating' : ''
                               }`}
                               onClick={(event) => handleCardClick(event, deal)}
                             >
-                              <div className="deal-card-top">
+                              <div className="deal-card-top-compact">
                                 <h4>{deal.title}</h4>
-
-                                <span className={`stage-badge stage-${deal.stage}`}>
-                                  {stageLabels[deal.stage]}
+                                <span className="deal-value-compact">
+                                  R$ {(deal.value || 0).toLocaleString('pt-BR')}
                                 </span>
                               </div>
 
-                              <p className="deal-value">
-                                R$ {(deal.value || 0).toLocaleString('pt-BR')}
-                              </p>
+                              <div className="deal-card-info-row">
+                                {deal.contact ? (
+                                  <span className="deal-card-entity">{deal.contact.name}</span>
+                                ) : deal.lead ? (
+                                  <span className="deal-card-entity">{deal.lead.name}</span>
+                                ) : null}
 
-                              {deal.contact ? (
-                                <div className="deal-meta">
-                                  <span>Contato</span>
-                                  <strong>{deal.contact.name}</strong>
-                                </div>
-                              ) : null}
+                                {deal.expectedCloseDate ? (
+                                  <span className="deal-card-date">
+                                    {new Date(deal.expectedCloseDate).toLocaleDateString('pt-BR')}
+                                  </span>
+                                ) : null}
 
-                              {deal.lead ? (
-                                <div className="deal-meta">
-                                  <span>Lead</span>
-                                  <strong>{deal.lead.name}</strong>
-                                </div>
-                              ) : null}
+                                {deal.lead?.score ? (
+                                  <span className="deal-card-score">{deal.lead.score}</span>
+                                ) : null}
+                              </div>
 
-                              {deal.expectedCloseDate ? (
-                                <div className="deal-meta">
-                                  <span>Previsão</span>
-                                  <strong>
-                                    {new Date(deal.expectedCloseDate).toLocaleDateString(
-                                      'pt-BR'
-                                    )}
-                                  </strong>
-                                </div>
-                              ) : null}
-
-                              {deal.notes?.length ? (
-                                <div className="deal-notes">{deal.notes[0]}</div>
-                              ) : null}
+                              <div className="deal-card-actions" onClick={(e) => e.preventDefault()}>
+                                {stage !== 'won' ? (
+                                  <button
+                                    type="button"
+                                    className="deal-card-action-btn deal-card-action-won"
+                                    title="Marcar como ganho"
+                                    onClick={(e) => { e.stopPropagation(); handleCloseDealWon(deal); }}
+                                  >
+                                    ✓
+                                  </button>
+                                ) : null}
+                                {stage !== 'lost' ? (
+                                  <button
+                                    type="button"
+                                    className="deal-card-action-btn deal-card-action-lost"
+                                    title="Marcar como perdido"
+                                    onClick={(e) => { e.stopPropagation(); handleCloseDealLost(deal); }}
+                                  >
+                                    ✗
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="deal-card-action-btn deal-card-action-delete"
+                                  title="Remover negócio"
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteDeal(deal); }}
+                                >
+                                  🗑
+                                </button>
+                              </div>
                             </div>
                           )}
                         </Draggable>
@@ -287,6 +370,9 @@ function DealsPage() {
           onUpdated={async () => {
             await loadKanban();
           }}
+          onDeleteDeal={handleDeleteDeal}
+          onCloseDealWon={handleCloseDealWon}
+          onCloseDealLost={handleCloseDealLost}
         />
       ) : null}
     </div>

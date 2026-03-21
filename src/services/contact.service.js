@@ -19,3 +19,8 @@ export async function updateContact(id, payload) {
   const response = await api.put(`/contacts/${id}`, payload);
   return response.data;
 }
+
+export async function deleteContact(id) {
+  const response = await api.delete(`/contacts/${id}`);
+  return response.data;
+}
