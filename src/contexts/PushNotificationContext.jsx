@@ -29,16 +29,14 @@ export function PushNotificationProvider({ children }) {
       .catch(() => {});
   }, [isVapidSupported]);
 
-  // Auto-subscribe when push is enabled in localStorage
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Initialize isSubscribed from real browser subscription state
   useEffect(() => {
-    if (!isVapidSupported || !vapidPublicKey) return;
-    const enabled = localStorage.getItem('crm_push_enabled') === 'true';
-    const granted = Notification.permission === 'granted';
-    if (enabled && granted) {
-      subscribeToPush().catch(() => {});
-    }
-  }, [vapidPublicKey]);
+    if (!isVapidSupported) return;
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => { if (sub) setIsSubscribed(true); })
+      .catch(() => {});
+  }, [isVapidSupported]);
 
   const subscribeToPush = useCallback(async () => {
     if (!isVapidSupported || !vapidPublicKey) return;
@@ -57,6 +55,16 @@ export function PushNotificationProvider({ children }) {
     }
   }, [isVapidSupported, vapidPublicKey, toast]);
 
+  // Auto-subscribe when push is enabled in localStorage
+  useEffect(() => {
+    if (!isVapidSupported || !vapidPublicKey) return;
+    const enabled = localStorage.getItem('crm_push_enabled') === 'true';
+    const granted = Notification.permission === 'granted';
+    if (enabled && granted) {
+      subscribeToPush().catch(() => {});
+    }
+  }, [isVapidSupported, vapidPublicKey, subscribeToPush]);
+
   const unsubscribeFromPush = useCallback(async () => {
     if (!isVapidSupported) return;
     try {
@@ -69,8 +77,9 @@ export function PushNotificationProvider({ children }) {
       setIsSubscribed(false);
     } catch (err) {
       console.error('Push unsubscribe error:', err);
+      toast.error('Não foi possível desativar notificações push nativas.');
     }
-  }, [isVapidSupported]);
+  }, [isVapidSupported, toast]);
 
   return (
     <PushNotificationContext.Provider

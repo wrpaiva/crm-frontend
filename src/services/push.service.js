@@ -1,3 +1,4 @@
+// src/services/push.service.js
 import api from './api';
 
 export function getVapidPublicKey() {
