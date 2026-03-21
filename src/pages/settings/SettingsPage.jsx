@@ -1683,7 +1683,7 @@ function AiResponderPanel({ toast }) {
 // --- Preferences Panel ---
 function PreferencesPanel() {
   const toast = useToast();
-  const { isVapidSupported, isSubscribed, subscribeToPush } = usePushNotification();
+  const { isVapidSupported, isSubscribed, subscribeToPush, unsubscribeFromPush } = usePushNotification();
   const [pushEnabled, setPushEnabled] = useState(
     () => localStorage.getItem('crm_push_enabled') === 'true'
   );
@@ -1766,6 +1766,9 @@ function PreferencesPanel() {
       setPushEnabled(true);
       toast.success('Notificações push ativadas.');
     } else {
+      if (isSubscribed) {
+        await unsubscribeFromPush();
+      }
       localStorage.setItem('crm_push_enabled', 'false');
       setPushEnabled(false);
       toast.info('Notificações push desativadas.');

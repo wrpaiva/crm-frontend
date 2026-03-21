@@ -5,6 +5,11 @@ import { useToast } from '../hooks/useToast';
 
 const PushNotificationContext = createContext(null);
 
+const isVapidSupported =
+  'Notification' in window &&
+  'serviceWorker' in navigator &&
+  'PushManager' in window;
+
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -17,18 +22,13 @@ export function PushNotificationProvider({ children }) {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [vapidPublicKey, setVapidPublicKey] = useState(null);
 
-  const isVapidSupported =
-    'Notification' in window &&
-    'serviceWorker' in navigator &&
-    'PushManager' in window;
-
   // Fetch public key once
   useEffect(() => {
     if (!isVapidSupported) return;
     getVapidPublicKey()
       .then((res) => setVapidPublicKey(res.data.publicKey))
       .catch(() => {});
-  }, [isVapidSupported]);
+  }, []);
 
   // Initialize isSubscribed from real browser subscription state
   useEffect(() => {
@@ -37,7 +37,7 @@ export function PushNotificationProvider({ children }) {
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => { if (sub) setIsSubscribed(true); })
       .catch(() => {});
-  }, [isVapidSupported]);
+  }, []);
 
   const subscribeToPush = useCallback(async () => {
     if (!isVapidSupported || !vapidPublicKey) return;
@@ -54,7 +54,7 @@ export function PushNotificationProvider({ children }) {
       console.error('Push subscribe error:', err);
       toast.error('Não foi possível ativar notificações push nativas.');
     }
-  }, [isVapidSupported, vapidPublicKey, toast]);
+  }, [vapidPublicKey, toast]);
 
   // Auto-subscribe when push is enabled in localStorage
   useEffect(() => {
@@ -64,7 +64,7 @@ export function PushNotificationProvider({ children }) {
     if (enabled && granted) {
       subscribeToPush().catch(() => {});
     }
-  }, [isVapidSupported, vapidPublicKey, subscribeToPush]);
+  }, [vapidPublicKey, subscribeToPush]);
 
   const unsubscribeFromPush = useCallback(async () => {
     if (!isVapidSupported) return;
@@ -80,7 +80,7 @@ export function PushNotificationProvider({ children }) {
       console.error('Push unsubscribe error:', err);
       toast.error('Não foi possível desativar notificações push nativas.');
     }
-  }, [isVapidSupported, toast]);
+  }, [toast]);
 
   return (
     <PushNotificationContext.Provider
