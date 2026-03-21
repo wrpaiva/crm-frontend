@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   completeActivity,
+  deleteActivity,
   getPendingActivities
 } from '../../services/activity.service';
+import { useToast } from '../../hooks/useToast';
+import { useUndoableDelete } from '../../hooks/useUndoableDelete';
+import { useUndoableAction } from '../../hooks/useUndoableAction';
+import Pagination from '../../components/common/Pagination';
 
 const typeLabels = {
   call: 'Ligação',
@@ -14,22 +19,25 @@ const typeLabels = {
 };
 
 function ActivitiesPage() {
+  const toast = useToast();
+
   const [response, setResponse] = useState(null);
+  const [activityItems, setActivityItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [completingId, setCompletingId] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
   const [error, setError] = useState('');
 
   useEffect(() => {
     loadActivities();
-  }, []);
+  }, [page]);
 
   async function loadActivities() {
     try {
       setLoading(true);
       setError('');
 
-      const data = await getPendingActivities();
+      const data = await getPendingActivities({ page, limit: 10 });
       setResponse(data);
     } catch (err) {
       console.error('Erro ao carregar atividades:', err);
@@ -39,41 +47,33 @@ function ActivitiesPage() {
     }
   }
 
-  async function handleComplete(activityId) {
-    try {
-      setCompletingId(activityId);
-      await completeActivity(activityId);
-      await loadActivities();
-    } catch (err) {
-      console.error('Erro ao concluir atividade:', err);
-      alert(err?.response?.data?.message || 'Erro ao concluir atividade.');
-    } finally {
-      setCompletingId(null);
-    }
-  }
-
-  const activities = useMemo(() => {
+  useEffect(() => {
     const data = response?.data || response?.items || response?.activities || [];
     const now = new Date();
-
-    return data.map((activity) => {
-      const dueDate = activity.dueDate ? new Date(activity.dueDate) : null;
-      const isOverdue = dueDate ? dueDate < now : false;
-
-      return {
-        ...activity,
-        isOverdue
-      };
-    });
+    setActivityItems(
+      data.map((a) => ({ ...a, isOverdue: a.dueDate ? new Date(a.dueDate) < now : false }))
+    );
   }, [response]);
+
+  const { removeWithUndo } = useUndoableDelete(setActivityItems, deleteActivity, 'Atividade removida.');
+  const { executeWithUndo } = useUndoableAction(setActivityItems, completeActivity, 'Atividade concluída.');
+
+  function handleComplete(activity) {
+    executeWithUndo(
+      activity,
+      (a) => ({ ...a, status: 'completed', completedAt: new Date().toISOString() })
+    );
+  }
+
+  const meta = response?.meta || null;
 
   const filteredActivities = useMemo(() => {
     if (filter === 'overdue') {
-      return activities.filter((item) => item.isOverdue);
+      return activityItems.filter((item) => item.isOverdue);
     }
 
     if (filter === 'today') {
-      return activities.filter((item) => {
+      return activityItems.filter((item) => {
         if (!item.dueDate) {
           return false;
         }
@@ -94,7 +94,7 @@ function ActivitiesPage() {
       const nextWeek = new Date();
       nextWeek.setDate(now.getDate() + 7);
 
-      return activities.filter((item) => {
+      return activityItems.filter((item) => {
         if (!item.dueDate) {
           return false;
         }
@@ -104,15 +104,15 @@ function ActivitiesPage() {
       });
     }
 
-    return activities;
-  }, [activities, filter]);
+    return activityItems;
+  }, [activityItems, filter]);
 
   const summary = useMemo(() => {
     const now = new Date();
 
-    const overdue = activities.filter((item) => item.isOverdue).length;
+    const overdue = activityItems.filter((item) => item.isOverdue).length;
 
-    const today = activities.filter((item) => {
+    const today = activityItems.filter((item) => {
       if (!item.dueDate) {
         return false;
       }
@@ -126,7 +126,7 @@ function ActivitiesPage() {
       );
     }).length;
 
-    const week = activities.filter((item) => {
+    const week = activityItems.filter((item) => {
       if (!item.dueDate) {
         return false;
       }
@@ -139,12 +139,12 @@ function ActivitiesPage() {
     }).length;
 
     return {
-      total: activities.length,
+      total: activityItems.length,
       overdue,
       today,
       week
     };
-  }, [activities]);
+  }, [activityItems]);
 
   if (loading) {
     return (
@@ -272,16 +272,26 @@ function ActivitiesPage() {
               <div className="activity-card-actions">
                 <button
                   className="success-button"
-                  disabled={completingId === activity.id}
-                  onClick={() => handleComplete(activity.id)}
+                  disabled={activity.status === 'completed'}
+                  onClick={() => handleComplete(activity)}
                 >
-                  {completingId === activity.id ? 'Concluindo...' : 'Concluir'}
+                  {activity.status === 'completed' ? 'Concluída' : 'Concluir'}
+                </button>
+
+                <button
+                  className="secondary-button"
+                  style={{ color: 'var(--accent-red, #ef4444)' }}
+                  onClick={() => removeWithUndo(activity.id ?? activity._id, activityItems)}
+                >
+                  Remover
                 </button>
               </div>
             </div>
           ))
         )}
       </section>
+
+      <Pagination meta={meta} onPageChange={setPage} />
     </div>
   );
 }
