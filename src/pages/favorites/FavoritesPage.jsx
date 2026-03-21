@@ -39,14 +39,15 @@ function FavoritesPage() {
     }
   }
 
-  async function handleRemove(favoriteId) {
-    try {
-      await removeFavorite(favoriteId);
-      toast.success('Favorito removido.');
-      setFavorites((prev) => prev.filter((f) => f._id !== favoriteId));
-    } catch (err) {
-      toast.error(getErrorMessage(err, 'Erro ao remover favorito.'));
-    }
+  function handleRemove(favoriteId) {
+    toast.undoable('Favorito será removido.', async () => {
+      try {
+        await removeFavorite(favoriteId);
+        setFavorites((prev) => prev.filter((f) => f._id !== favoriteId));
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Erro ao remover favorito.'));
+      }
+    });
   }
 
   function handleNavigate(fav) {

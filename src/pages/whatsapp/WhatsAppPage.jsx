@@ -6,7 +6,9 @@ import {
   sendMedia as sendMediaApi,
   getTemplates as getTemplatesApi,
   sendTemplate as sendTemplateApi,
-  markAsRead
+  markAsRead,
+  summarizeConversation as summarizeApi,
+  suggestResponses as suggestApi
 } from '../../services/whatsapp.service';
 import { useSocket } from '../../contexts/SocketContext';
 import { useToast } from '../../hooks/useToast';
@@ -14,7 +16,7 @@ import { getErrorMessage } from '../../utils/http';
 import {
   MessageCircle, Send, Search, Phone, ExternalLink,
   Check, CheckCheck, Paperclip, Image, FileText, Mic,
-  Video, X, LayoutTemplate
+  Video, X, LayoutTemplate, Sparkles, Wand2, Flame
 } from 'lucide-react';
 
 const MEDIA_TYPE_LABELS = {
@@ -56,6 +58,16 @@ function WhatsAppPage() {
   const [templatePhone, setTemplatePhone] = useState('');
   const [templateParams, setTemplateParams] = useState({});
   const [sendingTemplate, setSendingTemplate] = useState(false);
+
+  // AI Summary state
+  const [showSummary, setShowSummary] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+
+  // AI Suggestions state
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -131,6 +143,10 @@ function WhatsAppPage() {
     setActiveConversation(conv);
     setMessages([]);
     setLoadingMessages(true);
+    setShowSummary(false);
+    setSummary(null);
+    setShowSuggestions(false);
+    setSuggestions([]);
 
     try {
       const result = await getMessages(conv.id, { limit: 50 });
@@ -312,6 +328,47 @@ function WhatsAppPage() {
     } finally {
       setSendingTemplate(false);
     }
+  }
+
+  // --- AI Summary ---
+  async function handleSummarize() {
+    if (!activeConversation || loadingSummary) return;
+    setLoadingSummary(true);
+    setShowSummary(true);
+    setSummary(null);
+
+    try {
+      const result = await summarizeApi(activeConversation.id);
+      setSummary(result);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao gerar resumo.'));
+      setShowSummary(false);
+    } finally {
+      setLoadingSummary(false);
+    }
+  }
+
+  // --- AI Suggestions ---
+  async function handleSuggest() {
+    if (!activeConversation || loadingSuggestions) return;
+    setLoadingSuggestions(true);
+    setShowSuggestions(true);
+    setSuggestions([]);
+
+    try {
+      const result = await suggestApi(activeConversation.id);
+      setSuggestions(result.suggestions || []);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Erro ao gerar sugestões.'));
+      setShowSuggestions(false);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }
+
+  function handleSelectSuggestion(text) {
+    setInput(text);
+    inputRef.current?.focus();
   }
 
   function handleKeyDown(e) {
@@ -552,17 +609,60 @@ function WhatsAppPage() {
                   {activeConversation.phoneNumber}
                 </span>
               </div>
-              {activeConversation.lead && (
-                <a
-                  href={`/leads/${activeConversation.lead.id}`}
-                  className="wa-chat-header-link"
-                  title="Ver Lead"
+              <div className="wa-chat-header-actions">
+                {activeConversation.lead && (
+                  <a
+                    href={`/leads/${activeConversation.lead.id}`}
+                    className="wa-chat-header-link"
+                    title="Ver Lead"
+                  >
+                    <ExternalLink size={16} />
+                    Lead: {activeConversation.lead.name}
+                  </a>
+                )}
+                <button
+                  className="wa-ai-btn"
+                  onClick={handleSummarize}
+                  disabled={loadingSummary}
+                  title="Resumir conversa com IA"
                 >
-                  <ExternalLink size={16} />
-                  Lead: {activeConversation.lead.name}
-                </a>
-              )}
+                  <Sparkles size={16} />
+                  {loadingSummary ? 'Resumindo...' : 'Resumir'}
+                </button>
+              </div>
             </div>
+
+            {/* AI Summary Panel */}
+            {showSummary && (
+              <div className="wa-summary-panel">
+                <div className="wa-summary-header">
+                  <h4><Sparkles size={14} /> Resumo da Conversa</h4>
+                  <button className="wa-summary-close" onClick={() => setShowSummary(false)}>
+                    <X size={16} />
+                  </button>
+                </div>
+                {loadingSummary ? (
+                  <p className="wa-summary-loading">Gerando resumo com IA...</p>
+                ) : summary ? (
+                  <>
+                    <p className="wa-summary-text">{summary.summary}</p>
+                    {summary.nextActions && summary.nextActions.length > 0 && (
+                      <div className="wa-summary-actions">
+                        <h5>Próximas Ações</h5>
+                        {summary.nextActions.map((action, i) => (
+                          <div key={i} className="wa-summary-action">
+                            <span className={`wa-priority-badge priority-${action.priority}`}>
+                              {action.priority}
+                            </span>
+                            <span>{action.action}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
 
             {/* Messages */}
             <div className="chat-messages">
@@ -581,6 +681,36 @@ function WhatsAppPage() {
               )}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* Suggestions bar */}
+            {showSuggestions && (
+              <div className="wa-suggestions-bar">
+                {loadingSuggestions ? (
+                  <span className="wa-suggestions-loading">Gerando sugestões...</span>
+                ) : (
+                  <>
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className="wa-suggestion-chip"
+                        onClick={() => handleSelectSuggestion(s.text)}
+                        title={s.text}
+                      >
+                        {s.text}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="wa-suggestions-close"
+                      onClick={() => setShowSuggestions(false)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Input */}
             <form className="chat-input-area" onSubmit={handleSend}>
@@ -611,6 +741,16 @@ function WhatsAppPage() {
                   </div>
                 )}
               </div>
+
+              <button
+                type="button"
+                className="wa-suggest-btn"
+                onClick={handleSuggest}
+                disabled={loadingSuggestions}
+                title="Sugerir respostas com IA"
+              >
+                <Wand2 size={18} />
+              </button>
 
               <textarea
                 ref={inputRef}

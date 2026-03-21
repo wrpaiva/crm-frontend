@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   getActivitiesDashboard,
   getExecutiveDashboard,
@@ -195,6 +196,16 @@ function DashboardPage() {
         </button>
       </div>
 
+      {/* Navigation Tabs */}
+      <nav className="dashboard-nav-tabs">
+        <span className="dashboard-nav-tab active">
+          Executivo
+        </span>
+        <Link to="/dashboard/operational" className="dashboard-nav-tab">
+          Operacional
+        </Link>
+      </nav>
+
       {error ? (
         <div className="card" style={{ marginBottom: 16 }}>
           <p className="error-text">{error}</p>
@@ -300,7 +311,7 @@ function DashboardPage() {
                   endAngle={-270}
                 >
                   <Cell fill="#06b6d4" />
-                  <Cell fill="#21252b" />
+                  <Cell fill="var(--bg-secondary)" />
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
@@ -326,8 +337,8 @@ function DashboardPage() {
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
                 <YAxis hide />
                 <Tooltip 
-                  contentStyle={{ background: '#282c34', border: 'none', borderRadius: 8 }}
-                  labelStyle={{ color: '#fff' }}
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-primary)' }}
+                  labelStyle={{ color: 'var(--text-primary)' }}
                 />
                 <Area type="monotone" dataKey="lastMonth" stroke="#6b7280" strokeWidth={2} fill="none" dot={false} />
                 <Area type="monotone" dataKey="thisMonth" stroke="#8b5cf6" strokeWidth={2} fill="url(#colorThisMonth)" dot={false} />
@@ -373,8 +384,8 @@ function DashboardPage() {
                 <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} />
                 <Tooltip 
-                  contentStyle={{ background: '#282c34', border: 'none', borderRadius: 8 }}
-                  labelStyle={{ color: '#fff' }}
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 8, color: 'var(--text-primary)' }}
+                  labelStyle={{ color: 'var(--text-primary)' }}
                 />
                 <Area 
                   type="monotone" 

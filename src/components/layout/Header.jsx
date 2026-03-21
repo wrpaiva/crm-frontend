@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useToast } from '../../hooks/useToast';
 import { useSocket } from '../../contexts/SocketContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import {
   getNotifications,
   getUnreadCount,
   markAsRead,
   markAllAsRead
 } from '../../services/notification.service';
+import { globalSearch } from '../../services/search.service';
 import {
   Search,
   Bell,
@@ -20,7 +22,9 @@ import {
   MessageCircle,
   Trophy,
   AlertCircle,
-  X
+  X,
+  Sun,
+  Moon
 } from 'lucide-react';
 
 const ICON_MAP = {
@@ -49,12 +53,21 @@ function Header() {
   const navigate = useNavigate();
   const toast = useToast();
   const { socket } = useSocket();
+  const { theme, toggleTheme } = useTheme();
   const dropdownRef = useRef(null);
+  const searchRef = useRef(null);
+  const searchTimerRef = useRef(null);
 
   const [showDropdown, setShowDropdown] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   // Load unread count on mount
   useEffect(() => {
@@ -97,6 +110,71 @@ function Header() {
 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showDropdown]);
+
+  // Close search results on outside click / Esc
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setShowSearchResults(false);
+      }
+    }
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        setShowSearchResults(false);
+      }
+    }
+
+    if (showSearchResults) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showSearchResults]);
+
+  function handleSearchChange(e) {
+    const value = e.target.value;
+    setSearchQuery(value);
+
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+
+    if (!value.trim()) {
+      setSearchResults(null);
+      setShowSearchResults(false);
+      return;
+    }
+
+    searchTimerRef.current = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        const results = await globalSearch(value.trim(), 5);
+        setSearchResults(results);
+        setShowSearchResults(true);
+      } catch {
+        // silent
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  }
+
+  function handleSearchResultClick(type, id) {
+    setShowSearchResults(false);
+    setSearchQuery('');
+    setSearchResults(null);
+
+    const paths = { lead: '/leads', contact: '/contacts', deal: '/deals' };
+    const base = paths[type];
+    if (base) {
+      navigate(type === 'deal' ? base : `${base}/${id}`);
+    }
+  }
 
   async function loadUnreadCount() {
     try {
@@ -197,18 +275,95 @@ function Header() {
     navigate('/login');
   }
 
+  const hasResults = searchResults &&
+    ((searchResults.leads?.length || 0) + (searchResults.contacts?.length || 0) + (searchResults.deals?.length || 0)) > 0;
+
   const initials = user?.name
     ? user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
     : 'US';
 
   return (
     <header className="header">
-      <div className="header-search">
+      <div className="header-search" ref={searchRef}>
         <Search size={18} className="header-search-icon" />
-        <input type="text" placeholder="Buscar aqui..." />
+        <input
+          type="text"
+          placeholder="Buscar leads, contatos, negócios..."
+          value={searchQuery}
+          onChange={handleSearchChange}
+          onFocus={() => searchResults && setShowSearchResults(true)}
+        />
+
+        {showSearchResults && (
+          <div className="header-search-results">
+            {searchLoading ? (
+              <p className="search-result-empty">Buscando...</p>
+            ) : !hasResults ? (
+              <p className="search-result-empty">Nenhum resultado encontrado</p>
+            ) : (
+              <>
+                {searchResults.leads?.length > 0 && (
+                  <div className="search-result-group">
+                    <span className="search-result-group-title">Leads</span>
+                    {searchResults.leads.map((item) => (
+                      <div
+                        key={item.id || item._id}
+                        className="search-result-item"
+                        onClick={() => handleSearchResultClick('lead', item.id || item._id)}
+                      >
+                        <span className="search-result-name">{item.name}</span>
+                        <span className="search-result-detail">{item.email || item.company || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {searchResults.contacts?.length > 0 && (
+                  <div className="search-result-group">
+                    <span className="search-result-group-title">Contatos</span>
+                    {searchResults.contacts.map((item) => (
+                      <div
+                        key={item.id || item._id}
+                        className="search-result-item"
+                        onClick={() => handleSearchResultClick('contact', item.id || item._id)}
+                      >
+                        <span className="search-result-name">{item.name}</span>
+                        <span className="search-result-detail">{item.email || item.company || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {searchResults.deals?.length > 0 && (
+                  <div className="search-result-group">
+                    <span className="search-result-group-title">Negócios</span>
+                    {searchResults.deals.map((item) => (
+                      <div
+                        key={item.id || item._id}
+                        className="search-result-item"
+                        onClick={() => handleSearchResultClick('deal', item.id || item._id)}
+                      >
+                        <span className="search-result-name">{item.title}</span>
+                        <span className="search-result-detail">{item.stage || ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="header-actions">
+        <button
+          className="header-notification"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+        >
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+        </button>
+
         <div className="notif-wrapper" ref={dropdownRef}>
           <button
             className="header-notification"

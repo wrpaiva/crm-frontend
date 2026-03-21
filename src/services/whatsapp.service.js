@@ -1,5 +1,10 @@
 import api from './api';
 
+export async function getConversationsByLead(leadId) {
+  const response = await api.get(`/whatsapp/conversations/by-lead/${leadId}`);
+  return response.data;
+}
+
 export async function getConversations(params = {}) {
   const response = await api.get('/whatsapp/conversations', { params });
   return response.data;
@@ -58,5 +63,20 @@ export async function assignConversation(conversationId, assignedTo) {
 
 export async function linkToEntity(conversationId, data) {
   const response = await api.patch(`/whatsapp/conversations/${conversationId}/link`, data);
+  return response.data;
+}
+
+export async function summarizeConversation(conversationId) {
+  const response = await api.post(`/whatsapp/conversations/${conversationId}/summarize`);
+  return response.data;
+}
+
+export async function suggestResponses(conversationId) {
+  const response = await api.post(`/whatsapp/conversations/${conversationId}/suggest-responses`);
+  return response.data;
+}
+
+export async function getResponseRanking() {
+  const response = await api.get('/whatsapp/response-ranking');
   return response.data;
 }
