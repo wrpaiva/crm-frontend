@@ -1,3 +1,4 @@
+// src/contexts/PushNotificationContext.jsx
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { getVapidPublicKey, subscribe, unsubscribe } from '../services/push.service';
 import { useToast } from '../hooks/useToast';
