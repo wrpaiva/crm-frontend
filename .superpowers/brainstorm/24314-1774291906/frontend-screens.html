@@ -1,0 +1,111 @@
+<h2>Frontend — 3 novas telas</h2>
+<p class="subtitle">Selecione qualquer tela para indicar interesse ou dúvidas</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="settings" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:12px;font-family:monospace;font-size:11px;">
+      <div style="background:#1e293b;border-radius:6px;padding:10px;">
+        <div style="color:#94a3b8;margin-bottom:8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Settings → Aba WhatsApp</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          <span style="background:#3b82f6;color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;">+ Nova Conta</span>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:8px;margin-bottom:6px;">
+          <div style="color:#f1f5f9;font-size:11px;font-weight:bold;">📱 Vendas SP <span style="background:#22c55e;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;margin-left:6px;">ativo</span></div>
+          <div style="color:#64748b;font-size:10px;margin-top:2px;">+55 11 9xxxx-xxxx · 3 agentes</div>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:8px;margin-bottom:6px;">
+          <div style="color:#f1f5f9;font-size:11px;font-weight:bold;">📱 Suporte RJ <span style="background:#22c55e;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;margin-left:6px;">ativo</span></div>
+          <div style="color:#64748b;font-size:10px;margin-top:2px;">+55 21 9xxxx-xxxx · 2 agentes</div>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:8px;">
+          <div style="color:#94a3b8;font-size:11px;font-weight:bold;">📱 Marketing <span style="background:#475569;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;margin-left:6px;">inativo</span></div>
+          <div style="color:#64748b;font-size:10px;margin-top:2px;">+55 11 8xxxx-xxxx · 0 agentes</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Gestão de Contas (Settings)</h3>
+      <p>Aba "WhatsApp" em Settings. Admin cria/edita contas, ativa/desativa, atribui agentes e roles por conta.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="conversations" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:12px;font-family:monospace;font-size:11px;">
+      <div style="background:#1e293b;border-radius:6px;padding:10px;">
+        <div style="color:#94a3b8;margin-bottom:8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Central de Conversas</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="background:#3b82f6;color:#fff;padding:3px 8px;border-radius:4px;font-size:10px;">Todas ▾</span>
+          <span style="background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:3px 8px;border-radius:4px;font-size:10px;">Vendas SP</span>
+          <span style="background:#1e293b;color:#94a3b8;border:1px solid #334155;padding:3px 8px;border-radius:4px;font-size:10px;">Suporte RJ</span>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:7px;margin-bottom:4px;display:flex;align-items:center;gap:8px;">
+          <span style="background:#3b82f6;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;">SP</span>
+          <div style="flex:1;">
+            <div style="color:#f1f5f9;font-size:10px;">João Silva</div>
+            <div style="color:#64748b;font-size:9px;">Olá, gostaria de saber...</div>
+          </div>
+          <span style="background:#ef4444;color:#fff;font-size:9px;padding:1px 5px;border-radius:10px;">3</span>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:7px;margin-bottom:4px;display:flex;align-items:center;gap:8px;">
+          <span style="background:#8b5cf6;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;">RJ</span>
+          <div style="flex:1;">
+            <div style="color:#f1f5f9;font-size:10px;">Maria Santos</div>
+            <div style="color:#64748b;font-size:9px;">Preciso de suporte com...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Central de Conversas (atualizada)</h3>
+      <p>Filtro por conta no topo da lista. Badge colorido por conta em cada conversa. Sellers veem só as contas atribuídas a eles.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="queue" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:12px;font-family:monospace;font-size:11px;">
+      <div style="background:#1e293b;border-radius:6px;padding:10px;">
+        <div style="color:#94a3b8;margin-bottom:8px;font-size:10px;text-transform:uppercase;letter-spacing:1px;">Fila de Atendimento</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <div style="background:#0f172a;border-radius:4px;padding:6px 10px;text-align:center;">
+            <div style="color:#f59e0b;font-size:14px;font-weight:bold;">7</div>
+            <div style="color:#64748b;font-size:9px;">Aguardando</div>
+          </div>
+          <div style="background:#0f172a;border-radius:4px;padding:6px 10px;text-align:center;">
+            <div style="color:#22c55e;font-size:14px;font-weight:bold;">12</div>
+            <div style="color:#64748b;font-size:9px;">Em atend.</div>
+          </div>
+          <div style="background:#0f172a;border-radius:4px;padding:6px 10px;text-align:center;">
+            <div style="color:#94a3b8;font-size:14px;font-weight:bold;">2m</div>
+            <div style="color:#64748b;font-size:9px;">Tempo médio</div>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:7px;margin-bottom:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <span style="color:#f59e0b;font-size:10px;font-weight:bold;">#1</span>
+              <span style="color:#f1f5f9;font-size:10px;margin-left:6px;">Carlos Pereira</span>
+              <span style="background:#ef4444;color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;margin-left:4px;">Score 95</span>
+            </div>
+            <span style="color:#64748b;font-size:9px;">3min</span>
+          </div>
+        </div>
+        <div style="background:#0f172a;border-radius:4px;padding:7px;margin-bottom:4px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <span style="color:#64748b;font-size:10px;font-weight:bold;">#2</span>
+              <span style="color:#f1f5f9;font-size:10px;margin-left:6px;">Ana Lima</span>
+              <span style="background:#f59e0b;color:#fff;font-size:8px;padding:1px 4px;border-radius:3px;margin-left:4px;">Score 72</span>
+            </div>
+            <span style="color:#64748b;font-size:9px;">5min</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Fila de Atendimento (nova página)</h3>
+      <p>Visão de manager/admin: conversas aguardando, ordenadas por lead score. Métricas de fila no topo. Reatribuição manual disponível.</p>
+    </div>
+  </div>
+
+</div>
